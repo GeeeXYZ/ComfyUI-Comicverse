@@ -34,7 +34,7 @@ class ComicAssetLibraryNode:
     RETURN_TYPES = ("IMAGE", "INT")
     RETURN_NAMES = ("selected_images", "selected_count")
     FUNCTION = "process_images"
-    CATEGORY = "ComicVerse/Library"
+    CATEGORY = "ComicVerse"
 
     def process_images(self, **kwargs):
         """处理输入的图片"""
@@ -85,7 +85,7 @@ class LayoutTemplateSelectorNode:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("template_config",)
     FUNCTION = "generate_template"
-    CATEGORY = "ComicVerse/Library"
+    CATEGORY = "ComicVerse"
 
     TEMPLATE_DATA = {
         "2横版": {
@@ -180,7 +180,7 @@ class BasicLayoutComposerNode:
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("layout_image", "element_coords")
     FUNCTION = "compose_layout"
-    CATEGORY = "ComicVerse/Layout"
+    CATEGORY = "ComicVerse"
 
     DEFAULT_CANVAS_WIDTH = 1080
     DEFAULT_CANVAS_HEIGHT = 1920
@@ -274,7 +274,7 @@ class SpeechBubbleGeneratorNode:
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("image_with_bubbles", "bubble_coords")
     FUNCTION = "add_speech_bubble"
-    CATEGORY = "ComicVerse/Layout"
+    CATEGORY = "ComicVerse"
 
     def add_speech_bubble(self, base_image, target_image_index, bubble_text,
                           bubble_style, bubble_position_x, bubble_position_y,
@@ -403,7 +403,7 @@ class DecorativeTextAdderNode:
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("final_image",)
     FUNCTION = "add_decorative_text"
-    CATEGORY = "ComicVerse/Layout"
+    CATEGORY = "ComicVerse"
 
     FONT_MAPPING = {
         "手写体": "handwriting.ttf",
