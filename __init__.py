@@ -6,11 +6,11 @@ Author: ComicVerse Team
 Version: 0.1
 """
 
-from nodes.comic_asset_library import ComicAssetLibraryNode
-from nodes.layout_template_selector import LayoutTemplateSelectorNode
-from nodes.basic_layout_composer import BasicLayoutComposerNode
-from nodes.speech_bubble_generator import SpeechBubbleGeneratorNode
-from nodes.decorative_text_adder import DecorativeTextAdderNode
+from .nodes.comic_asset_library import ComicAssetLibraryNode
+from .nodes.layout_template_selector import LayoutTemplateSelectorNode
+from .nodes.basic_layout_composer import BasicLayoutComposerNode
+from .nodes.speech_bubble_generator import SpeechBubbleGeneratorNode
+from .nodes.decorative_text_adder import DecorativeTextAdderNode
 
 # Node class mappings - Required by ComfyUI
 NODE_CLASS_MAPPINGS = {

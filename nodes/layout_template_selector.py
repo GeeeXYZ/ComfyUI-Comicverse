@@ -44,7 +44,6 @@ class LayoutTemplateSelectorNode:
     RETURN_NAMES = ("template_config",)
     FUNCTION = "generate_template"
     CATEGORY = "ComicVerse/Library"
-    OUTPUT_NODE = False
 
     # 预设模板数据字典
     TEMPLATE_DATA = {

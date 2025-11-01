@@ -68,7 +68,6 @@ class DecorativeTextAdderNode:
     RETURN_NAMES = ("final_image",)
     FUNCTION = "add_decorative_text"
     CATEGORY = "ComicVerse/Layout"
-    OUTPUT_NODE = False
 
     # 字体文件映射
     FONT_MAPPING = {

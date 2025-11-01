@@ -74,7 +74,6 @@ class SpeechBubbleGeneratorNode:
     RETURN_NAMES = ("image_with_bubbles", "bubble_coords")
     FUNCTION = "add_speech_bubble"
     CATEGORY = "ComicVerse/Layout"
-    OUTPUT_NODE = False
 
     def add_speech_bubble(self, base_image, target_image_index, bubble_text,
                           bubble_style, bubble_position_x, bubble_position_y,

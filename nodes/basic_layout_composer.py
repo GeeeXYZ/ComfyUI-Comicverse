@@ -42,7 +42,6 @@ class BasicLayoutComposerNode:
     RETURN_NAMES = ("layout_image", "element_coords")
     FUNCTION = "compose_layout"
     CATEGORY = "ComicVerse/Layout"
-    OUTPUT_NODE = False
 
     # 默认画布尺寸
     DEFAULT_CANVAS_WIDTH = 1080

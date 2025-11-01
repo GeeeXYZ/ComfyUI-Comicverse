@@ -36,7 +36,6 @@ class ComicAssetLibraryNode:
     RETURN_NAMES = ("selected_images", "selected_count")
     FUNCTION = "process_images"
     CATEGORY = "ComicVerse/Library"
-    OUTPUT_NODE = False
 
     def __init__(self):
         self.assets = []
