@@ -194,6 +194,7 @@ class ComicAssetLibraryNode:
             if PromptServer is not None:
                 thumbs = []
                 max_send = min(120, len(lib_list))
+                max_preview = min(30, len(lib_list))  # Only send full preview for first 30
                 for i in range(max_send):
                     b = lib_list[i]
                     # b: [1,H,W,C] tensor in 0..1
@@ -201,17 +202,36 @@ class ComicAssetLibraryNode:
                     img_uint8 = (b[0].clamp(0, 1) * 255).byte().cpu().numpy()
                     from PIL import Image
                     img = Image.fromarray(img_uint8, mode='RGBA' if c == 4 else 'RGB')
-                    # create thumbnail
+                    
+                    # create thumbnail (96px for grid display)
                     thumb_w = 96
                     scale = thumb_w / float(w)
                     thumb_h = max(1, int(h * scale))
-                    img = img.resize((thumb_w, thumb_h), Image.BILINEAR)
+                    thumb_img = img.resize((thumb_w, thumb_h), Image.BILINEAR)
                     bio = BytesIO()
-                    img.save(bio, format='PNG')
+                    thumb_img.save(bio, format='PNG')
                     data = bio.getvalue()
                     import base64
-                    data_url = "data:image/png;base64," + base64.b64encode(data).decode('ascii')
-                    thumbs.append({"w": img.width, "h": img.height, "data": data_url})
+                    thumb_data_url = "data:image/png;base64," + base64.b64encode(data).decode('ascii')
+                    
+                    # create preview image (max 1024px for zoom)
+                    thumb_entry = {"w": thumb_img.width, "h": thumb_img.height, "data": thumb_data_url}
+                    if i < max_preview:
+                        max_preview_dim = 1024
+                        if w > h:
+                            preview_w = min(max_preview_dim, w)
+                            preview_h = max(1, int(h * preview_w / w))
+                        else:
+                            preview_h = min(max_preview_dim, h)
+                            preview_w = max(1, int(w * preview_h / h))
+                        preview_img = img.resize((preview_w, preview_h), Image.BILINEAR)
+                        bio = BytesIO()
+                        preview_img.save(bio, format='PNG')
+                        data = bio.getvalue()
+                        preview_data_url = "data:image/png;base64," + base64.b64encode(data).decode('ascii')
+                        thumb_entry["preview"] = preview_data_url
+                    
+                    thumbs.append(thumb_entry)
                 PromptServer.instance.send_sync("comicverse.library.previews", {
                     "thumbs": thumbs,
                     "count": len(lib_list),
@@ -315,4 +335,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ComicAssetLibraryNode": "Comic Assets Library",
     "LayoutTemplateSelectorNode": "排版模板选择 (LayoutTemplateSelector)",
 }
+
 

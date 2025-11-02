@@ -15,6 +15,78 @@ app.registerExtension({
             node.comicverseThumbs = [];
             node.comicverseSelected = [];
             node.comicversePendingDeletions = [];
+            node.comicversePreviewOverlay = null;
+
+            // Image preview overlay method
+            node._showImagePreview = function(img, index) {
+                // Close existing preview if any
+                if (node.comicversePreviewOverlay) {
+                    node.comicversePreviewOverlay.remove();
+                    node.comicversePreviewOverlay = null;
+                }
+
+                // Create overlay
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background: rgba(0,0,0,0.8); z-index: 9999; display: flex;
+                    align-items: center; justify-content: center; cursor: pointer;
+                `;
+
+                // Create image container
+                const imgContainer = document.createElement('div');
+                imgContainer.style.cssText = `
+                    position: relative; max-width: 80vw; max-height: 80vh;
+                    background: #222; padding: 12px; border-radius: 8px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                `;
+
+                const imgEl = document.createElement('img');
+                // Use preview image if available, otherwise fallback to thumbnail
+                if (img.originalData && img.originalData.preview) {
+                    // Use high-res preview image
+                    imgEl.src = img.originalData.preview;
+                } else {
+                    // Fallback to thumbnail if no preview available
+                    imgEl.src = img.src;
+                }
+                imgEl.style.cssText = `
+                    display: block; max-width: 80vw; max-height: 80vh;
+                    object-fit: contain; border-radius: 4px;
+                `;
+
+                // Close button
+                const closeBtn = document.createElement('div');
+                closeBtn.textContent = '×';
+                closeBtn.style.cssText = `
+                    position: absolute; top: -8px; right: -8px;
+                    width: 32px; height: 32px; background: #333;
+                    color: white; border-radius: 50%; display: flex;
+                    align-items: center; justify-content: center;
+                    cursor: pointer; font-size: 24px; font-weight: bold;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                `;
+
+                const closePreview = () => {
+                    overlay.remove();
+                    node.comicversePreviewOverlay = null;
+                };
+
+                closeBtn.onclick = (e) => { e.stopPropagation(); closePreview(); };
+                overlay.onclick = closePreview;
+                document.addEventListener('keydown', function escHandler(e) {
+                    if (e.key === 'Escape') {
+                        closePreview();
+                        document.removeEventListener('keydown', escHandler);
+                    }
+                });
+
+                imgContainer.appendChild(imgEl);
+                imgContainer.appendChild(closeBtn);
+                overlay.appendChild(imgContainer);
+                document.body.appendChild(overlay);
+                node.comicversePreviewOverlay = overlay;
+            };
 
             node.addWidget("button", "Set output count", null, () => {
                 const outWidget = node.widgets?.find(w => w.name === "output_count");
@@ -119,9 +191,9 @@ app.registerExtension({
                 
                 // Draw "pending deletion" overlay first
                 if (node.comicversePendingDeletions?.includes(i)) {
-                    ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
+                    ctx.fillStyle = "rgba(180, 0, 0, 0.4)";  // Dark red overlay
                     ctx.fillRect(x, y, cell, cell);
-                    ctx.strokeStyle = "rgba(255, 0, 0, 0.8)";
+                    ctx.strokeStyle = "rgba(180, 0, 0, 0.9)";  // Dark red cross
                     ctx.lineWidth = 3;
                     ctx.beginPath();
                     ctx.moveTo(x + 10, y + 10);
@@ -135,7 +207,7 @@ app.registerExtension({
                 const btnSize = 16;
                 const btnX = x + cell - btnSize - 2;
                 const btnY = y + 2;
-                ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
+                ctx.fillStyle = "rgba(180, 0, 0, 0.9)";  // Dark red background
                 ctx.fillRect(btnX, btnY, btnSize, btnSize);
                 ctx.strokeStyle = "#fff";
                 ctx.lineWidth = 2;
@@ -146,15 +218,34 @@ app.registerExtension({
                 ctx.lineTo(btnX + 4, btnY + btnSize - 4);
                 ctx.stroke();
                 
+                // Draw zoom/preview button (magnifying glass icon) on bottom-right corner
+                const zoomBtnSize = 16;  // Same size as delete button
+                const zoomBtnX = x + cell - zoomBtnSize - 2;
+                const zoomBtnY = y + cell - zoomBtnSize - 2;
+                const centerX = zoomBtnX + zoomBtnSize/2;
+                const centerY = zoomBtnY + zoomBtnSize/2;
+                // Draw magnifying glass icon (circle + handle)
+                ctx.strokeStyle = "#fff";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(centerX - 1, centerY - 1, 4, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(centerX + 3, centerY + 3);
+                ctx.lineTo(centerX + 6, centerY + 6);
+                ctx.stroke();
+                
                 if (node.comicverseSelected?.includes(i)) {
                     ctx.strokeStyle = "#3fa7ff";
                     ctx.lineWidth = 2;
                     ctx.strokeRect(x + 1, y + 1, cell - 2, cell - 2);
                 }
 
-                // Store delete button bounds for click detection
+                // Store button bounds for click detection
                 if (!node.comicverseDeleteBtns) node.comicverseDeleteBtns = [];
+                if (!node.comicverseZoomBtns) node.comicverseZoomBtns = [];
                 node.comicverseDeleteBtns[i] = { x: btnX, y: btnY, w: btnSize, h: btnSize, index: i };
+                node.comicverseZoomBtns[i] = { x: zoomBtnX, y: zoomBtnY, w: zoomBtnSize, h: zoomBtnSize, index: i };
             }
         };
 
@@ -197,6 +288,21 @@ app.registerExtension({
                 }
             }
 
+            // Check if clicking on zoom/preview button
+            if (node.comicverseZoomBtns) {
+                for (let btn of node.comicverseZoomBtns) {
+                    if (pos[0] >= btn.x && pos[0] <= btn.x + btn.w &&
+                        pos[1] >= btn.y && pos[1] <= btn.y + btn.h) {
+                        // Zoom button clicked - show preview overlay
+                        const thumbs = node.comicverseThumbs || [];
+                        if (thumbs[btn.index]) {
+                            node._showImagePreview(thumbs[btn.index], btn.index);
+                        }
+                        return; // Prevent thumbnail selection
+                    }
+                }
+            }
+
             const x = pos[0] - x0;
             const y = pos[1] - y0;
             if (x < 0 || y < 0) return;
@@ -223,10 +329,13 @@ app.registerExtension({
             if (!graph) return;
             const nodes = graph._nodes?.filter(n => n.comfyClass === "ComicAssetLibraryNode") || [];
             nodes.forEach((target) => {
-                const incoming = (thumbs || []).map(t => {
+                const incoming = (thumbs || []).map((t, idx) => {
                     const img = new Image();
                     img.src = t.data;
-                    return img;
+                    // Store original backend data including preview field
+                    const imgObj = img;
+                    imgObj.originalData = t; // Store full backend data
+                    return imgObj;
                 });
                 // Replace entire thumbnails list on each update to match backend state
                 target.comicverseThumbs = incoming;
