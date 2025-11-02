@@ -247,6 +247,10 @@ app.registerExtension({
                 node.comicverseDeleteBtns[i] = { x: btnX, y: btnY, w: btnSize, h: btnSize, index: i };
                 node.comicverseZoomBtns[i] = { x: zoomBtnX, y: zoomBtnY, w: zoomBtnSize, h: zoomBtnSize, index: i };
             }
+            // Reset ctx styles to not affect ComfyUI widgets
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "";
+            ctx.fillStyle = "";
         };
 
         nodeType.prototype.onMouseDown = function(e, pos, graphcanvas) {
