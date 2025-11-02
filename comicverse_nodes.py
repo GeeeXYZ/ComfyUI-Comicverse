@@ -49,6 +49,7 @@ class ComicAssetLibraryNode:
     def INPUT_TYPES(cls) -> Dict[str, Any]:
         input_types = {
             "required": {
+                "input_count": ("INT", {"default": 1, "min": 1, "max": 20}),
                 "output_count": ("INT", {"default": 2, "min": 1, "max": 6}),
                 "selected_indices": ("STRING", {"default": "", "multiline": False, "placeholder": "选中顺序：如 2,0,1"}),
                 "pending_deletions": ("STRING", {"default": "", "multiline": False, "placeholder": "待删除索引（自动填充）"}),
@@ -85,10 +86,10 @@ class ComicAssetLibraryNode:
             indices.append(idx)
         return indices
 
-    def run(self, output_count: int, selected_indices: str = "", unique_id: str = "", pending_deletions: str = "", **kwargs):
-        # Collect connected IMAGE inputs from kwargs (image_input_1, image_input_2, ..., image_input_20)
+    def run(self, input_count: int, output_count: int, selected_indices: str = "", unique_id: str = "", pending_deletions: str = "", **kwargs):
+        # Collect connected IMAGE inputs from kwargs (image_input_1, image_input_2, ..., image_input_N where N = input_count)
         image_batches = []
-        for i in range(1, 21):
+        for i in range(1, input_count + 1):
             img_key = f"image_input_{i}"
             if img_key in kwargs and kwargs[img_key] is not None:
                 image_batches.append(kwargs[img_key])

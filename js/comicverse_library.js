@@ -88,6 +88,22 @@ app.registerExtension({
                 node.comicversePreviewOverlay = overlay;
             };
 
+            node.addWidget("button", "Set input count", null, () => {
+                const inWidget = node.widgets?.find(w => w.name === "input_count");
+                const desired = Math.max(1, Math.min(20, Number(inWidget?.value || 1)));
+                // Add or remove IMAGE input ports based on desired count
+                const current = (node.inputs && node.inputs.length) ? node.inputs.length : 0;
+                // Remove excess inputs
+                for (let i = current - 1; i >= desired; i--) {
+                    node.removeInput(i);
+                }
+                // Add missing inputs
+                for (let i = current; i < desired; i++) {
+                    node.addInput(`image_input_${i+1}`, "IMAGE");
+                }
+                node.setDirtyCanvas(true, true);
+            });
+
             node.addWidget("button", "Set output count", null, () => {
                 const outWidget = node.widgets?.find(w => w.name === "output_count");
                 const desired = Math.max(1, Math.min(6, Number(outWidget?.value || 2)));
@@ -113,6 +129,17 @@ app.registerExtension({
             });
 
             setTimeout(() => {
+                const inWidget = node.widgets?.find(w => w.name === "input_count");
+                const desiredIn = Math.max(1, Math.min(20, Number(inWidget?.value || 1)));
+                const currentIn = (node.inputs && node.inputs.length) ? node.inputs.length : 0;
+                // Remove excess inputs
+                for (let i = currentIn - 1; i >= desiredIn; i--) {
+                    node.removeInput(i);
+                }
+                // Add missing inputs
+                for (let i = currentIn; i < desiredIn; i++) {
+                    node.addInput(`image_input_${i+1}`, "IMAGE");
+                }
                 const outWidget = node.widgets?.find(w => w.name === "output_count");
                 const desired = Math.max(1, Math.min(6, Number(outWidget?.value || 2)));
                 const current = (node.outputs && node.outputs.length) ? node.outputs.length : 0;
