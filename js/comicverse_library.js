@@ -194,7 +194,7 @@ app.registerExtension({
                     ctx.fillStyle = "rgba(180, 0, 0, 0.4)";  // Dark red overlay
                     ctx.fillRect(x, y, cell, cell);
                     ctx.strokeStyle = "rgba(180, 0, 0, 0.9)";  // Dark red cross
-                    ctx.lineWidth = 3;
+                    ctx.lineWidth = 1;
                     ctx.beginPath();
                     ctx.moveTo(x + 10, y + 10);
                     ctx.lineTo(x + cell - 10, y + cell - 10);
@@ -210,7 +210,7 @@ app.registerExtension({
                 ctx.fillStyle = "rgba(180, 0, 0, 0.9)";  // Dark red background
                 ctx.fillRect(btnX, btnY, btnSize, btnSize);
                 ctx.strokeStyle = "#fff";
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(btnX + 4, btnY + 4);
                 ctx.lineTo(btnX + btnSize - 4, btnY + btnSize - 4);
@@ -226,7 +226,7 @@ app.registerExtension({
                 const centerY = zoomBtnY + zoomBtnSize/2;
                 // Draw magnifying glass icon (circle + handle)
                 ctx.strokeStyle = "#fff";
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.arc(centerX - 1, centerY - 1, 4, 0, Math.PI * 2);
                 ctx.stroke();
@@ -237,7 +237,7 @@ app.registerExtension({
                 
                 if (node.comicverseSelected?.includes(i)) {
                     ctx.strokeStyle = "#3fa7ff";
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 1;
                     ctx.strokeRect(x + 1, y + 1, cell - 2, cell - 2);
                 }
 
