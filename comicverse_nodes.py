@@ -47,22 +47,20 @@ _PENDING_DELETIONS: dict[str, List[int]] = {}  # Track pending deletions per nod
 class ComicAssetLibraryNode:
     @classmethod
     def INPUT_TYPES(cls) -> Dict[str, Any]:
-        input_types = {
+        return {
             "required": {
-                "input_count": ("INT", {"default": 1, "min": 1, "max": 20}),
                 "output_count": ("INT", {"default": 2, "min": 1, "max": 6}),
                 "selected_indices": ("STRING", {"default": "", "multiline": False, "placeholder": "选中顺序：如 2,0,1"}),
                 "pending_deletions": ("STRING", {"default": "", "multiline": False, "placeholder": "待删除索引（自动填充）"}),
             },
-            "optional": {},
+            "optional": {
+                "image_input_a": ("IMAGE", {}),
+                "image_input_b": ("IMAGE", {}),
+            },
             "hidden": {
                 "unique_id": ("UNIQUE_ID", {}),
             },
         }
-        # Add 20 optional IMAGE inputs
-        for i in range(1, 21):
-            input_types["optional"][f"image_input_{i}"] = ("IMAGE", {})
-        return input_types
 
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "INT")
     RETURN_NAMES = ("image_1", "image_2", "image_3", "image_4", "image_5", "image_6", "selected_count")
@@ -86,17 +84,16 @@ class ComicAssetLibraryNode:
             indices.append(idx)
         return indices
 
-    def run(self, input_count: int, output_count: int, selected_indices: str = "", unique_id: str = "", pending_deletions: str = "", **kwargs):
-        # Collect connected IMAGE inputs from kwargs (image_input_1, image_input_2, ..., image_input_N where N = input_count)
+    def run(self, output_count: int, selected_indices: str = "", image_input_a=None, image_input_b=None, unique_id: str = "", pending_deletions: str = "", **kwargs):
+        # Collect connected IMAGE inputs (two ports), each may be a batch [B,H,W,C]
         image_batches = []
-        for i in range(1, input_count + 1):
-            img_key = f"image_input_{i}"
-            if img_key in kwargs and kwargs[img_key] is not None:
-                image_batches.append(kwargs[img_key])
+        if image_input_a is not None:
+            image_batches.append(image_input_a)
+        if image_input_b is not None:
+            image_batches.append(image_input_b)
 
-        # Allow running without inputs (for cache viewing/deletion only)
-        # if len(image_batches) == 0:
-        #     raise ValueError("请至少连接1个 IMAGE 输入到漫画素材库节点 (ComicAssetLibraryNode)。")
+        if len(image_batches) == 0:
+            raise ValueError("请至少连接1个 IMAGE 输入到漫画素材库节点 (ComicAssetLibraryNode)。")
 
         # Validate basic tensor shapes, flatten to single-image batches (allow different H,W)
         current_list = []
