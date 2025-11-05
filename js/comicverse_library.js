@@ -328,21 +328,38 @@ app.registerExtension({
     },
     async setup(app) {
         app.api.addEventListener("comicverse.library.previews", (event) => {
-            const { thumbs, selected } = event.detail || {};
+            const { mode, thumbs, adds, removes, selected } = event.detail || {};
             const graph = app.graph;
             if (!graph) return;
             const nodes = graph._nodes?.filter(n => n.comfyClass === "ComicAssetLibraryNode") || [];
             nodes.forEach((target) => {
-                const incoming = (thumbs || []).map((t, idx) => {
+                const applyAdd = (t) => {
                     const img = new Image();
                     img.src = t.data;
-                    // Store original backend data including preview field
-                    const imgObj = img;
-                    imgObj.originalData = t; // Store full backend data
-                    return imgObj;
-                });
-                // Replace entire thumbnails list on each update to match backend state
-                target.comicverseThumbs = incoming;
+                    img.originalData = t;
+                    (target.comicverseThumbs || (target.comicverseThumbs = [])).push(img);
+                };
+
+                if (mode === "delta") {
+                    // Apply removals first (descending indices)
+                    const toRemove = Array.isArray(removes) ? removes.slice().sort((a,b)=>b-a) : [];
+                    toRemove.forEach((idx) => {
+                        if (Array.isArray(target.comicverseThumbs) && idx >= 0 && idx < target.comicverseThumbs.length) {
+                            target.comicverseThumbs.splice(idx, 1);
+                        }
+                    });
+                    // Apply additions (append)
+                    (adds || []).forEach(applyAdd);
+                } else {
+                    // Full replace
+                    const incoming = (thumbs || []).map((t) => {
+                        const img = new Image();
+                        img.src = t.data;
+                        img.originalData = t;
+                        return img;
+                    });
+                    target.comicverseThumbs = incoming;
+                }
                 // Hard cap to avoid unbounded growth
                 if (target.comicverseThumbs.length > 200) {
                     target.comicverseThumbs.splice(0, target.comicverseThumbs.length - 200);

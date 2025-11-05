@@ -11,6 +11,7 @@ import torch
 from io import BytesIO
 import hashlib
 import json
+import base64
 
 try:
     from server import PromptServer  # ComfyUI server messaging
@@ -42,6 +43,51 @@ class ComicVerseTestNode:
 _LIBRARY_CACHE: dict[str, List[torch.Tensor]] = {}
 _LIBRARY_HASHES: dict[str, List[str]] = {}
 _PENDING_DELETIONS: dict[str, List[int]] = {}  # Track pending deletions per node
+
+# Lightweight caches for encoded thumbnails and previews keyed by image hash
+_THUMB_CACHE: dict[str, str] = {}
+_PREVIEW_CACHE: dict[str, str] = {}
+_LAST_SENT_COUNT: dict[str, int] = {}
+
+def _encode_image_data_url(img, *, prefer_webp: bool, jpeg_ok: bool, quality: int = 80) -> tuple[str, str]:
+    """
+    Encode PIL.Image to a data URL. Prefer WebP when available; fall back to JPEG (if no alpha)
+    or PNG. Returns (data_url, mime).
+    """
+    mime = "image/png"
+    buffer = BytesIO()
+    mode = img.mode
+    has_alpha = mode in ("RGBA", "LA") or ("transparency" in img.info)
+    # Try WebP first if requested
+    if prefer_webp:
+        try:
+            img.save(buffer, format="WEBP", quality=quality, method=4)
+            mime = "image/webp"
+            data = buffer.getvalue()
+            return "data:" + mime + ";base64," + base64.b64encode(data).decode("ascii"), mime
+        except Exception:
+            buffer = BytesIO()
+            # fall through to JPEG/PNG
+    # Try JPEG if allowed and no alpha
+    if jpeg_ok and not has_alpha:
+        try:
+            # Ensure RGB for JPEG
+            rgb = img.convert("RGB") if img.mode != "RGB" else img
+            rgb.save(buffer, format="JPEG", quality=quality, optimize=True)
+            mime = "image/jpeg"
+            data = buffer.getvalue()
+            return "data:" + mime + ";base64," + base64.b64encode(data).decode("ascii"), mime
+        except Exception:
+            buffer = BytesIO()
+    # Fallback PNG (supports alpha, lossless)
+    try:
+        img.save(buffer, format="PNG")
+        mime = "image/png"
+        data = buffer.getvalue()
+        return "data:" + mime + ";base64," + base64.b64encode(data).decode("ascii"), mime
+    except Exception:
+        # As a last resort, return an empty 1x1 PNG data URL
+        return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ee1GfUAAAAASUVORK5CYII=", "image/png"
 
 
 class ComicAssetLibraryNode:
@@ -192,51 +238,139 @@ class ComicAssetLibraryNode:
         # Push thumbnails to frontend for interactive preview and selection
         try:
             if PromptServer is not None:
-                thumbs = []
-                max_send = min(120, len(lib_list))
-                max_preview = min(30, len(lib_list))  # Only send full preview for first 30
-                for i in range(max_send):
-                    b = lib_list[i]
-                    # b: [1,H,W,C] tensor in 0..1
-                    h, w, c = b.shape[1:]
-                    img_uint8 = (b[0].clamp(0, 1) * 255).byte().cpu().numpy()
-                    from PIL import Image
-                    img = Image.fromarray(img_uint8, mode='RGBA' if c == 4 else 'RGB')
-                    
-                    # create thumbnail (96px for grid display)
-                    thumb_w = 96
-                    scale = thumb_w / float(w)
-                    thumb_h = max(1, int(h * scale))
-                    thumb_img = img.resize((thumb_w, thumb_h), Image.BILINEAR)
-                    bio = BytesIO()
-                    thumb_img.save(bio, format='PNG')
-                    data = bio.getvalue()
-                    import base64
-                    thumb_data_url = "data:image/png;base64," + base64.b64encode(data).decode('ascii')
-                    
-                    # create preview image (max 1024px for zoom)
-                    thumb_entry = {"w": thumb_img.width, "h": thumb_img.height, "data": thumb_data_url}
-                    if i < max_preview:
-                        max_preview_dim = 1024
-                        if w > h:
-                            preview_w = min(max_preview_dim, w)
-                            preview_h = max(1, int(h * preview_w / w))
+                key = unique_id or "global"
+                prev_count = _LAST_SENT_COUNT.get(key, 0)
+                new_count = len(lib_list)
+
+                # Parse pending deletions indices from input for delta removes
+                pending_del_indices: List[int] = []
+                if pending_deletions:
+                    try:
+                        pending_del_indices = [int(i.strip()) for i in pending_deletions.split(",") if i.strip().isdigit()]
+                    except Exception:
+                        pending_del_indices = []
+
+                # If first time, or counts don't make sense (overflow eviction, etc.), send full
+                full_sync_needed = (prev_count == 0)
+                if not full_sync_needed:
+                    if new_count < prev_count and not pending_del_indices:
+                        # count shrunk but we have no explicit deletion info -> fall back to full
+                        full_sync_needed = True
+
+                if full_sync_needed:
+                    thumbs = []
+                    max_send = min(120, new_count)
+                    max_preview = min(30, new_count)
+                    for i in range(max_send):
+                        b = lib_list[i]
+                        h, w, c = b.shape[1:]
+                        img_uint8 = (b[0].clamp(0, 1) * 255).byte().cpu().numpy()
+                        from PIL import Image
+                        img = Image.fromarray(img_uint8, mode='RGBA' if c == 4 else 'RGB')
+                        digest = lib_hashes[i] if i < len(lib_hashes) else None
+
+                        thumb_w = 96
+                        scale = thumb_w / float(w)
+                        thumb_h = max(1, int(h * scale))
+                        if digest and digest in _THUMB_CACHE:
+                            thumb_data_url = _THUMB_CACHE[digest]
                         else:
-                            preview_h = min(max_preview_dim, h)
-                            preview_w = max(1, int(w * preview_h / h))
-                        preview_img = img.resize((preview_w, preview_h), Image.BILINEAR)
-                        bio = BytesIO()
-                        preview_img.save(bio, format='PNG')
-                        data = bio.getvalue()
-                        preview_data_url = "data:image/png;base64," + base64.b64encode(data).decode('ascii')
-                        thumb_entry["preview"] = preview_data_url
-                    
-                    thumbs.append(thumb_entry)
-                PromptServer.instance.send_sync("comicverse.library.previews", {
-                    "thumbs": thumbs,
-                    "count": len(lib_list),
-                    "selected": self._parse_indices(selected_indices, len(lib_list)) or [],
-                })
+                            thumb_img = img.resize((thumb_w, thumb_h), Image.BILINEAR)
+                            data_url, _ = _encode_image_data_url(thumb_img, prefer_webp=True, jpeg_ok=(c == 3), quality=80)
+                            thumb_data_url = data_url
+                            if digest:
+                                _THUMB_CACHE[digest] = thumb_data_url
+
+                        entry = {"w": thumb_w, "h": thumb_h, "data": thumb_data_url}
+                        if i < max_preview:
+                            if digest and digest in _PREVIEW_CACHE:
+                                entry["preview"] = _PREVIEW_CACHE[digest]
+                            else:
+                                max_preview_dim = 1024
+                                if w > h:
+                                    preview_w = min(max_preview_dim, w)
+                                    preview_h = max(1, int(h * preview_w / w))
+                                else:
+                                    preview_h = min(max_preview_dim, h)
+                                    preview_w = max(1, int(w * preview_h / h))
+                                preview_img = img.resize((preview_w, preview_h), Image.BILINEAR)
+                                data_url, _ = _encode_image_data_url(preview_img, prefer_webp=True, jpeg_ok=(c == 3), quality=80)
+                                entry["preview"] = data_url
+                                if digest:
+                                    _PREVIEW_CACHE[digest] = data_url
+                        thumbs.append(entry)
+
+                    # guard caches
+                    if len(_THUMB_CACHE) > 500:
+                        _THUMB_CACHE.clear()
+                    if len(_PREVIEW_CACHE) > 500:
+                        _PREVIEW_CACHE.clear()
+
+                    Payload = {
+                        "mode": "full",
+                        "thumbs": thumbs,
+                        "count": new_count,
+                        "selected": self._parse_indices(selected_indices, len(lib_list)) or [],
+                    }
+                    PromptServer.instance.send_sync("comicverse.library.previews", Payload)
+                    _LAST_SENT_COUNT[key] = new_count
+                else:
+                    # delta mode: send deletions and appends
+                    adds_count = max(0, new_count - prev_count + len(pending_del_indices))
+                    # additions are assumed appended at the end of lib_list
+                    adds: List[Dict[str, Any]] = []
+                    if adds_count > 0:
+                        start = max(0, new_count - adds_count)
+                        end = new_count
+                        max_preview = min(30, new_count)
+                        for i in range(start, end):
+                            b = lib_list[i]
+                            h, w, c = b.shape[1:]
+                            img_uint8 = (b[0].clamp(0, 1) * 255).byte().cpu().numpy()
+                            from PIL import Image
+                            img = Image.fromarray(img_uint8, mode='RGBA' if c == 4 else 'RGB')
+                            digest = lib_hashes[i] if i < len(lib_hashes) else None
+
+                            thumb_w = 96
+                            scale = thumb_w / float(w)
+                            thumb_h = max(1, int(h * scale))
+                            if digest and digest in _THUMB_CACHE:
+                                thumb_data_url = _THUMB_CACHE[digest]
+                            else:
+                                thumb_img = img.resize((thumb_w, thumb_h), Image.BILINEAR)
+                                data_url, _ = _encode_image_data_url(thumb_img, prefer_webp=True, jpeg_ok=(c == 3), quality=80)
+                                thumb_data_url = data_url
+                                if digest:
+                                    _THUMB_CACHE[digest] = thumb_data_url
+
+                            entry = {"w": thumb_w, "h": thumb_h, "data": thumb_data_url}
+                            if i < max_preview:
+                                if digest and digest in _PREVIEW_CACHE:
+                                    entry["preview"] = _PREVIEW_CACHE[digest]
+                                else:
+                                    max_preview_dim = 1024
+                                    if w > h:
+                                        preview_w = min(max_preview_dim, w)
+                                        preview_h = max(1, int(h * preview_w / w))
+                                    else:
+                                        preview_h = min(max_preview_dim, h)
+                                        preview_w = max(1, int(w * preview_h / h))
+                                    preview_img = img.resize((preview_w, preview_h), Image.BILINEAR)
+                                    data_url, _ = _encode_image_data_url(preview_img, prefer_webp=True, jpeg_ok=(c == 3), quality=80)
+                                    entry["preview"] = data_url
+                                    if digest:
+                                        _PREVIEW_CACHE[digest] = data_url
+                            adds.append(entry)
+
+                    Payload = {
+                        "mode": "delta",
+                        "removes": sorted([i for i in pending_del_indices if 0 <= i < prev_count], reverse=True),
+                        "adds": adds,
+                        "count": new_count,
+                        "selected": self._parse_indices(selected_indices, len(lib_list)) or [],
+                    }
+                    PromptServer.instance.send_sync("comicverse.library.previews", Payload)
+                    _LAST_SENT_COUNT[key] = new_count
         except Exception:
             pass
 
