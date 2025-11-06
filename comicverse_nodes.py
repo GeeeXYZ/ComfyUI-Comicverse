@@ -157,11 +157,14 @@ class ComicAssetLibraryNode:
         lib_list = _LIBRARY_CACHE.get(key, [])
         lib_hashes = _LIBRARY_HASHES.get(key, [])
         
+        # Track deletion indices for later index adjustment
+        deletion_indices = []
+        
         # Process pending deletions first (before adding new images)
         if pending_deletions:
-            indices = [int(i.strip()) for i in pending_deletions.split(",") if i.strip().isdigit()]
+            deletion_indices = [int(i.strip()) for i in pending_deletions.split(",") if i.strip().isdigit()]
             # Delete in reverse order to avoid index shifting issues
-            for idx in sorted(indices, reverse=True):
+            for idx in sorted(deletion_indices, reverse=True):
                 if 0 <= idx < len(lib_list):
                     lib_list.pop(idx)
                     lib_hashes.pop(idx)
@@ -186,6 +189,27 @@ class ComicAssetLibraryNode:
                 lib_hashes.pop(0)
         _LIBRARY_CACHE[key] = lib_list
         _LIBRARY_HASHES[key] = lib_hashes
+
+        # Adjust selected_indices after deletions: selected indices are based on pre-deletion list
+        # Need to map them to post-deletion list positions
+        if deletion_indices and selected_indices:
+            deletion_indices_set = set(deletion_indices)
+            # Parse selection indices assuming they refer to pre-deletion list
+            pre_deletion_count = len(lib_list) + len(deletion_indices)
+            selected_before = self._parse_indices(selected_indices, pre_deletion_count)
+            if selected_before:
+                adjusted_selected = []
+                for sel_idx in selected_before:
+                    # Skip if this index was deleted
+                    if sel_idx in deletion_indices_set:
+                        continue
+                    # Calculate adjustment: for each deletion index < sel_idx, reduce by 1
+                    adjustment = sum(1 for d in deletion_indices if d < sel_idx)
+                    new_idx = sel_idx - adjustment
+                    if 0 <= new_idx < len(lib_list):
+                        adjusted_selected.append(new_idx)
+                # Update selected_indices with adjusted indices
+                selected_indices = ",".join(map(str, adjusted_selected)) if adjusted_selected else ""
 
         # Determine selection order relative to the library
         order = self._parse_indices(selected_indices, len(lib_list))

@@ -364,7 +364,12 @@ app.registerExtension({
                 if (target.comicverseThumbs.length > 200) {
                     target.comicverseThumbs.splice(0, target.comicverseThumbs.length - 200);
                 }
-                target.comicverseSelected = Array.isArray(selected) ? selected.slice(0, 6) : [];
+                // Use backend-adjusted selected indices (backend already adjusted for deletions)
+                if (Array.isArray(selected)) {
+                    target.comicverseSelected = selected.slice(0, 6);
+                } else {
+                    target.comicverseSelected = [];
+                }
                 const w = target.widgets?.find(w => w.name === "selected_indices");
                 if (w) w.value = (target.comicverseSelected || []).join(",");
                 
