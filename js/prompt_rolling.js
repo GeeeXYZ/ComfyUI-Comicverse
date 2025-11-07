@@ -1,19 +1,18 @@
 import { app } from "../../scripts/app.js";
+import { ComfyWidgets } from "../../scripts/widgets.js";
 
 const MAX_INPUTS = 8;
 
-// Dynamically manage input/weight pairs and hide unused widgets
 const syncDynamicInputs = (node) => {
     if (!node.inputs) node.inputs = [];
     if (!node.widgets) node.widgets = [];
 
     const getLibraryIndex = (name) => {
         const match = name && name.match(/library_(\d+)/);
-        return match ? parseInt(match[1]) : null;
+        return match ? parseInt(match[1], 10) : null;
     };
 
     const ensureInputCount = () => {
-        // Determine highest connected library index
         let highestConnected = 0;
         for (const input of node.inputs) {
             const idx = getLibraryIndex(input?.name);
@@ -25,13 +24,11 @@ const syncDynamicInputs = (node) => {
 
         const desired = Math.min(MAX_INPUTS, Math.max(1, highestConnected + 1));
 
-        // Add inputs up to desired count
         while (node.inputs.length < desired) {
             const nextIdx = node.inputs.length + 1;
             node.addInput(`library_${nextIdx}`, "STRING");
         }
 
-        // Remove extra inputs (only if unconnected)
         for (let i = node.inputs.length - 1; i >= desired; i--) {
             const input = node.inputs[i];
             if (input && input.link == null) {
@@ -40,66 +37,106 @@ const syncDynamicInputs = (node) => {
         }
     };
 
-    const updateWeightWidgets = (connectedCount) => {
-        let visibleWeightCount = 0;
+    const ensureWeightWidgets = () => {
+        const connectedLibraries = node.inputs
+            .map((input) => {
+                if (!input || input.link == null) return null;
+                const idx = getLibraryIndex(input.name);
+                return Number.isFinite(idx) ? idx : null;
+            })
+            .filter((idx) => idx !== null);
 
-        for (const widget of node.widgets) {
-            if (!widget || !widget.name) continue;
+        const highestIndex = connectedLibraries.length
+            ? Math.max(...connectedLibraries)
+            : 1;
 
-            if (widget.name === "seed") {
-                if (!widget.__origComputeSize && widget.computeSize) {
-                    widget.__origComputeSize = widget.computeSize;
-                }
-                widget.hidden = false;
-                widget.disabled = false;
-                widget.computeSize = widget.__origComputeSize || widget.computeSize;
-                visibleWeightCount++;
-                continue;
+        const neededWeights = Math.max(1, connectedLibraries.length, highestIndex);
+
+        const weightWidgets = node.widgets
+            .map((widget, idx) => ({ widget, idx }))
+            .filter(({ widget }) => widget?.name?.startsWith("weight_"));
+
+        // remove extra
+        weightWidgets
+            .filter(({ widget }) => {
+                const match = widget.name.match(/^weight_(\d+)$/);
+                return match ? parseInt(match[1], 10) > neededWeights : false;
+            })
+            .sort((a, b) => b.idx - a.idx)
+            .forEach(({ widget, idx }) => {
+                widget.onRemove?.();
+                node.widgets.splice(idx, 1);
+            });
+
+        // add missing
+        for (let i = 1; i <= neededWeights; i++) {
+            const name = `weight_${i}`;
+            let widget = node.widgets.find((w) => w?.name === name);
+            if (!widget) {
+                widget = ComfyWidgets.FLOAT(
+                    node,
+                    name,
+                    [
+                        "FLOAT",
+                        {
+                            default: 1.0,
+                            min: 0.0,
+                            max: 2.0,
+                            step: 0.1,
+                        },
+                    ],
+                    app
+                ).widget;
             }
-
-            const match = widget.name.match(/^weight_(\d+)$/);
-            if (!match) continue;
-
-            const weightIndex = parseInt(match[1]);
-            const shouldShow = weightIndex <= Math.max(1, connectedCount);
-
-            if (!widget.__origComputeSize && widget.computeSize) {
-                widget.__origComputeSize = widget.computeSize;
-            }
-
-            widget.hidden = !shouldShow;
-            widget.disabled = !shouldShow;
-            widget.computeSize = shouldShow
-                ? widget.__origComputeSize || widget.computeSize
-                : () => [0, -4];
-            widget.type = shouldShow ? "number" : "hidden";
-
-            if (shouldShow) visibleWeightCount++;
         }
 
-        return visibleWeightCount;
+        // sort widgets: control_after_generate first, then seed, then weights ascending
+        node.widgets.sort((a, b) => {
+            if (!a?.name || !b?.name) return 0;
+            
+            // control_after_generate should be first
+            if (a.name === "control_after_generate") return -1;
+            if (b.name === "control_after_generate") return 1;
+            
+            // seed should be second
+            if (a.name === "seed") return -1;
+            if (b.name === "seed") return 1;
+
+            const aMatch = a.name.match(/^weight_(\d+)$/);
+            const bMatch = b.name.match(/^weight_(\d+)$/);
+            if (aMatch && bMatch) {
+                return parseInt(aMatch[1], 10) - parseInt(bMatch[1], 10);
+            }
+            if (aMatch) return -1;
+            if (bMatch) return 1;
+            return 0;
+        });
+
+        return neededWeights;
     };
 
     ensureInputCount();
+    const visibleWeights = ensureWeightWidgets();
 
-    const connectedCount = Math.max(0, ...node.inputs
-        .map((input) => (input && input.link != null ? getLibraryIndex(input.name) : 0)));
+    const widgetHeight = 28;
+    const inputHeight = 20;
+    const padding = 16;
 
-    const visibleWeightCount = updateWeightWidgets(connectedCount);
-
-    // Adjust node size based on visible widgets and inputs
-    const baseHeight = 100;
-    const weightHeight = 36;
-    const inputHeight = 26;
-    const visibleInputs = node.inputs.length;
-    const totalHeight = baseHeight + visibleWeightCount * weightHeight + visibleInputs * inputHeight;
+    const weightsHeight = visibleWeights * widgetHeight;
+    const inputsHeight = node.inputs.length * inputHeight;
+    const contentHeight = 60 + weightsHeight + inputsHeight + padding;
 
     const minWidth = 320;
-    const minHeight = 140;
-    const width = Math.max(minWidth, node.size?.[0] || minWidth);
-    const height = Math.max(minHeight, totalHeight);
+    const minHeight = Math.max(160, contentHeight);
 
-    node.size = [width, height];
+    const currentWidth = node.size?.[0] || minWidth;
+    const currentHeight = node.size?.[1] || minHeight;
+
+    node.size = [Math.max(minWidth, currentWidth), Math.max(minHeight, currentHeight)];
+    node.minSize = node.minSize || [minWidth, minHeight];
+    node.minSize[0] = minWidth;
+    node.minSize[1] = minHeight;
+
     node.setDirtyCanvas(true, true);
 };
 
@@ -107,33 +144,41 @@ app.registerExtension({
     name: "comicverse.prompt_rolling",
     async nodeCreated(node) {
         if (node.comfyClass !== "PromptRollingNode") return;
-        
-        // Initialize dynamic input management
+
         syncDynamicInputs(node);
-        
-        // Hook into connection changes
+
         const originalConnectionsChange = node.onConnectionsChange;
         node.onConnectionsChange = function (type, slot, connected, link_info) {
             const result = originalConnectionsChange ? originalConnectionsChange.apply(this, arguments) : undefined;
-            
+
             if (type === LiteGraph.INPUT) {
                 syncDynamicInputs(this);
                 this.setDirtyCanvas(true, true);
             }
-            
+
             return result;
         };
-        
-        // Hook into configure (when loading from saved workflow)
+
         const originalOnConfigure = node.onConfigure;
         node.onConfigure = function (info) {
             const r = originalOnConfigure ? originalOnConfigure.apply(this, arguments) : undefined;
             syncDynamicInputs(this);
             return r;
         };
-        
-        // Set initial size
-        node.setSize([300, 150]);
+
+        const originalOnResize = node.onResize;
+        node.onResize = function (size) {
+            if (this.minSize) {
+                size[0] = Math.max(size[0], this.minSize[0]);
+                size[1] = Math.max(size[1], this.minSize[1]);
+            }
+            if (originalOnResize) {
+                return originalOnResize.apply(this, arguments);
+            }
+        };
+
+        node.setSize([320, 160]);
+        syncDynamicInputs(node);
     },
 });
 

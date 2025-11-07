@@ -252,6 +252,16 @@ pytest -q
 
 ## 更新日志
 
+### v1.2.0 (2025-11-07)
+- ✅ **重要修复**: Prompt Rolling 节点 weight 控件显示覆盖问题（通过重新排序 widgets 数组）
+- ✅ 改进 Prompt Rolling 节点自适应尺寸，确保面板始终大于内容
+- ✅ **重要修复**: Text Preview 节点不可用问题（使用 ComfyUI 标准 widget 系统）
+- ✅ Text Preview 节点新增 STRING 输出（可选连接）
+- ✅ 改进 Text Preview 真正的多行文本显示
+- ✅ 两个节点均支持自动调整大小和最小尺寸约束
+- ✅ 添加完整的单元测试覆盖新功能
+- ✅ 添加详细的 bug 修复文档（BUGFIX_WIDGET_ORDERING.md）
+
 ### v1.1.0 (2025-11-07)
 - ✅ 新增 Text Preview (Comic) 节点
 - ✅ 修复 Comic Library 图片选择不一致问题

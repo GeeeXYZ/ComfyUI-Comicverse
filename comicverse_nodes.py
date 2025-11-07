@@ -19,26 +19,6 @@ except Exception:  # pragma: no cover
     PromptServer = None  # type: ignore
 
 
-class ComicVerseTestNode:
-    @classmethod
-    def INPUT_TYPES(cls) -> Dict[str, Any]:
-        # Minimal input: a single string to echo back
-        return {
-            "required": {
-                "text": ("STRING", {"default": "Hello ComicVerse!", "multiline": False}),
-            }
-        }
-
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("text_out",)
-    FUNCTION = "run"
-    CATEGORY = "ComicVerse/Test"
-
-    def run(self, text: str):
-        # Echo input back to verify execution path
-        return (str(text),)
-
-
 # Persistent in-process cache for library images per node instance
 _LIBRARY_CACHE: dict[str, List[torch.Tensor]] = {}
 _LIBRARY_HASHES: dict[str, List[str]] = {}
@@ -576,17 +556,15 @@ class PromptStrengthSlider:
 
 
 NODE_CLASS_MAPPINGS = {
-    "ComicVerseTestNode": ComicVerseTestNode,
     "ComicAssetLibraryNode": ComicAssetLibraryNode,
     "LayoutTemplateSelectorNode": LayoutTemplateSelectorNode,
     "PromptStrengthSlider": PromptStrengthSlider,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ComicVerseTestNode": "ComicVerse Test Node",
-    "ComicAssetLibraryNode": "Comic Assets Library",
-    "LayoutTemplateSelectorNode": "Layout Template Selector (Comic)",
-    "PromptStrengthSlider": "Prompt Weight Slider (Comic)",
+    "ComicAssetLibraryNode": "Comic Assets Library | ComicVerse",
+    "LayoutTemplateSelectorNode": "Layout Template Selector | ComicVerse",
+    "PromptStrengthSlider": "Prompt Weight Slider | ComicVerse",
 }
 
 

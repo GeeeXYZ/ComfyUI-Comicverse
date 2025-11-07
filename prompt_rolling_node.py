@@ -131,7 +131,8 @@ class PromptRollingNode:
 
     @classmethod
     def INPUT_TYPES(cls) -> Dict[str, Any]:
-        # Build required and optional in a way that groups library+weight together
+        # Only define seed and first library+weight as required
+        # Frontend will dynamically add more weight widgets as needed
         required = {
             "seed": (
                 "INT",
@@ -140,6 +141,7 @@ class PromptRollingNode:
                     "min": -1,
                     "max": 2**31 - 1,
                     "tooltip": "Random seed (-1 for random, same seed = same result)",
+                    "control_after_generate": "randomize",
                 },
             ),
             "library_1": (
@@ -162,6 +164,7 @@ class PromptRollingNode:
             ),
         }
 
+        # Library inputs 2-8 are optional (frontend adds inputs dynamically)
         optional: Dict[str, Tuple[str, Dict[str, Any]]] = {}
         for i in range(2, cls.MAX_INPUTS + 1):
             optional[f"library_{i}"] = (
@@ -172,6 +175,7 @@ class PromptRollingNode:
                     "tooltip": f"Optional prompt library {i}",
                 },
             )
+            # Also add optional weights (but frontend will manage them)
             optional[f"weight_{i}"] = (
                 "FLOAT",
                 {
@@ -250,7 +254,7 @@ NODE_CLASS_MAPPINGS = {
 
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "PromptRollingNode": "Prompt Rolling (Comic)",
+    "PromptRollingNode": "Prompt Rolling | ComicVerse",
 }
 
 

@@ -9,6 +9,7 @@ from prompt_loader_node import (
     _parse_prompt_file,
 )
 from prompt_rolling_node import PromptRollingNode, PromptRollingError, _parse_library_payload
+from text_preview_node import TextPreviewNode
 
 
 def test_parse_prompt_file_array(tmp_path: Path):
@@ -93,5 +94,60 @@ def test_prompt_rolling_requires_library():
     node = PromptRollingNode()
     with pytest.raises(PromptRollingError):
         node.roll(seed=-1)
+
+
+def test_text_preview_basic():
+    """Test that Text Preview node returns both output and UI data"""
+    node = TextPreviewNode()
+    test_text = "This is a test prompt"
+    
+    result = node.preview_text(text=test_text)
+    
+    # Should return tuple: (output_string, ui_dict)
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    
+    output_text, ui_data = result
+    
+    # Check output passthrough
+    assert output_text == test_text
+    
+    # Check UI data format
+    assert isinstance(ui_data, dict)
+    assert "ui" in ui_data
+    assert "text" in ui_data["ui"]
+    assert ui_data["ui"]["text"][0] == test_text
+
+
+def test_text_preview_multiline():
+    """Test Text Preview with multiline text"""
+    node = TextPreviewNode()
+    test_text = "Line 1\nLine 2\nLine 3"
+    
+    output_text, ui_data = node.preview_text(text=test_text)
+    
+    assert output_text == test_text
+    assert ui_data["ui"]["text"][0] == test_text
+
+
+def test_text_preview_empty():
+    """Test Text Preview with empty string"""
+    node = TextPreviewNode()
+    
+    output_text, ui_data = node.preview_text(text="")
+    
+    assert output_text == ""
+    assert ui_data["ui"]["text"][0] == ""
+
+
+def test_text_preview_long_text():
+    """Test Text Preview with very long text"""
+    node = TextPreviewNode()
+    test_text = "word " * 1000  # 1000 words
+    
+    output_text, ui_data = node.preview_text(text=test_text)
+    
+    assert output_text == test_text
+    assert ui_data["ui"]["text"][0] == test_text
 
 

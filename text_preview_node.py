@@ -1,17 +1,17 @@
 """
 Text Preview Node for ComicVerse custom nodes.
 
-A simple node that displays STRING input without any output.
+A simple node that displays STRING input and optionally passes it through.
 Useful for debugging and visualizing text data in the workflow.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 
 
 class TextPreviewNode:
     """
-    Display-only node that shows STRING input in a multiline text widget.
-    No outputs - purely for visualization and debugging purposes.
+    Preview node that displays STRING input in a multiline text widget.
+    Also passes through the text as output for optional downstream connections.
     """
 
     @classmethod
@@ -28,19 +28,20 @@ class TextPreviewNode:
             }
         }
 
-    RETURN_TYPES = ()
-    RETURN_NAMES = ()
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("text",)
     FUNCTION = "preview_text"
     CATEGORY = "ComicVerse/Utils"
     OUTPUT_NODE = True  # Mark as output node so it executes even without downstream connections
 
     def preview_text(self, text: str = "") -> Dict[str, Any]:
         """
-        Store the text for display. The frontend widget will show it.
-        Returns the text in a dict so the UI can access it.
+        Store the text for display and pass it through as output.
+        The frontend widget will show it, and it can be connected to other nodes.
         """
-        # Return the text in a format the frontend can access
-        return {"ui": {"text": [text]}}
+        # Return in the format AlekPet uses: {"string": [...]}
+        # This is what onExecuted receives in the frontend
+        return {"ui": {"string": [text]}, "result": (text,)}
 
 
 NODE_CLASS_MAPPINGS = {
@@ -49,6 +50,6 @@ NODE_CLASS_MAPPINGS = {
 
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "TextPreviewNode": "Text Preview (Comic)",
+    "TextPreviewNode": "Text Preview | ComicVerse",
 }
 

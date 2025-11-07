@@ -1,95 +1,97 @@
 import { app } from "../../scripts/app.js";
+import { ComfyWidgets } from "../../scripts/widgets.js";
 
 app.registerExtension({
     name: "comicverse.textpreview",
-    async nodeCreated(node) {
-        if (node.comfyClass !== "TextPreviewNode") return;
 
-        // Hide the default text input widget (since it's forceInput)
-        const textWidget = node.widgets?.find(w => w.name === "text");
-        if (textWidget) {
-            textWidget.type = "hidden";
-            textWidget.computeSize = () => [0, -4];
-        }
+    async beforeRegisterNodeDef(nodeType, nodeData, app) {
+        if (nodeData.name !== "TextPreviewNode") return;
 
-        // Create a display widget to show the text (multiline textarea)
-        const displayWidget = node.addWidget(
-            "text",
-            "preview",
-            "",
-            () => {},
-            {
-                multiline: true,
-                serialize: false,
-            }
-        );
-        
-        // Make it read-only and style it as a proper multiline textarea
-        setTimeout(() => {
-            if (displayWidget.inputEl) {
-                // Replace the default input with a textarea for true multiline support
-                const oldInput = displayWidget.inputEl;
-                const textarea = document.createElement("textarea");
-                textarea.value = oldInput.value || "";
-                textarea.readOnly = true;
-                textarea.style.opacity = "0.85";
-                textarea.style.fontFamily = "monospace";
-                textarea.style.fontSize = "12px";
-                textarea.style.whiteSpace = "pre-wrap";
-                textarea.style.overflow = "auto";
-                textarea.style.resize = "vertical";
-                textarea.rows = 6;
+        // Node Created - exactly like AlekPet's PreviewTextNode
+        const onNodeCreated = nodeType.prototype.onNodeCreated;
+        nodeType.prototype.onNodeCreated = function () {
+            const ret = onNodeCreated
+                ? onNodeCreated.apply(this, arguments)
+                : undefined;
 
-                oldInput.parentNode?.replaceChild(textarea, oldInput);
-                displayWidget.inputEl = textarea;
-            }
-        }, 0);
+            let TextPreviewNodes = app.graph._nodes.filter(
+                (wi) => wi.type == nodeData.name
+            );
+            let nodeName = `${nodeData.name}_${TextPreviewNodes.length}`;
 
-        // Custom compute size for better display
-        displayWidget.computeSize = function(width) {
-            const lines = (this.value || "").split(/\r?\n/);
-            const lineCount = Math.max(6, Math.min(lines.length + 1, 20));
-            const height = lineCount * 20 + 40;
-            return [width || 400, height];
+            console.log(`[TextPreview] Create ${nodeData.name}: ${nodeName}`);
+
+            const wi = ComfyWidgets.STRING(
+                this,
+                nodeName,
+                [
+                    "STRING",
+                    {
+                        default: "",
+                        placeholder: "Text message output...",
+                        multiline: true,
+                    },
+                ],
+                app
+            );
+            wi.widget.inputEl.readOnly = true;
+            wi.widget.inputEl.style.opacity = 0.6;
+            wi.widget.inputEl.style.fontFamily = "monospace";
+
+            this.setSize(this.computeSize(this.size));
+            app.graph.setDirtyCanvas(true, false);
+
+            return ret;
         };
 
-        // Store reference for later updates
-        node.textPreviewWidget = displayWidget;
+        // Function set value - exactly like AlekPet
+        const outSet = function (texts) {
+            if (!texts || texts.length === 0) return;
 
-        // Update display when node is executed
-        const originalOnExecuted = node.onExecuted;
-        node.onExecuted = function(message) {
-            if (originalOnExecuted) {
-                originalOnExecuted.apply(this, arguments);
+            let widget_id = this?.widgets.findIndex(
+                (w) => w.type == "customtext"
+            );
+
+            if (widget_id < 0) {
+                console.warn("[TextPreview] No customtext widget found!");
+                return;
             }
 
-            // The backend returns {"ui": {"text": [text_value]}}
-            // ComfyUI passes this as the message parameter
-            if (message && message.text) {
-                let textValue = "";
-                
-                if (Array.isArray(message.text)) {
-                    textValue = message.text[0] || "";
-                } else if (typeof message.text === "string") {
-                    textValue = message.text;
-                }
-                
-                if (this.textPreviewWidget) {
-                    const finalValue = String(textValue ?? "");
-                    this.textPreviewWidget.value = finalValue;
-                    if (this.textPreviewWidget.inputEl) {
-                        this.textPreviewWidget.inputEl.value = finalValue;
-                    }
-                    // Trigger size recalculation
-                    this.setSize(this.computeSize());
-                }
+            let formatted = texts;
+
+            if (Array.isArray(texts)) {
+                formatted = texts.map((v) =>
+                    typeof v === "object" ? JSON.stringify(v) : v.toString()
+                );
+                formatted = formatted
+                    .filter((word) => word.trim() !== "")
+                    .map((word) => word.trim())
+                    .join(" ");
             }
 
-            app.graph?.setDirtyCanvas(true, true);
+            console.log("[TextPreview] Setting value:", formatted);
+            this.widgets[widget_id].value = formatted;
+            app.graph.setDirtyCanvas(true);
         };
 
-        // Set initial size
-        node.setSize([400, 150]);
+        // onExecuted - exactly like AlekPet
+        const onExecuted = nodeType.prototype.onExecuted;
+        nodeType.prototype.onExecuted = function (message) {
+            onExecuted?.apply(this, arguments);
+            
+            console.log("[TextPreview] onExecuted message:", message);
+            
+            // Try different possible message formats
+            let texts = null;
+            if (message?.string) {
+                texts = message.string;
+            } else if (message?.text) {
+                texts = message.text;
+            }
+            
+            if (texts) {
+                outSet.call(this, texts);
+            }
+        };
     },
 });
-
