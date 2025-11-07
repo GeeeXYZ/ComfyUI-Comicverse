@@ -157,17 +157,21 @@ class ComicAssetLibraryNode:
         lib_list = _LIBRARY_CACHE.get(key, [])
         lib_hashes = _LIBRARY_HASHES.get(key, [])
         
-        # Track deletion indices for later index adjustment
-        deletion_indices = []
+        # Track actual deletion indices for later index adjustment and delta payloads
+        requested_deletions: List[int] = []
+        actual_deletions: List[int] = []
         
         # Process pending deletions first (before adding new images)
         if pending_deletions:
-            deletion_indices = [int(i.strip()) for i in pending_deletions.split(",") if i.strip().isdigit()]
+            requested_deletions = [int(i.strip()) for i in pending_deletions.split(",") if i.strip().isdigit()]
             # Delete in reverse order to avoid index shifting issues
-            for idx in sorted(deletion_indices, reverse=True):
+            for idx in sorted(requested_deletions, reverse=True):
                 if 0 <= idx < len(lib_list):
                     lib_list.pop(idx)
                     lib_hashes.pop(idx)
+                    actual_deletions.append(idx)
+            # We stored actual deletions in descending order; normalize to ascending for later logic
+            actual_deletions.sort()
         
         # Hard cap to avoid unbounded memory
         max_cache = 200
@@ -192,10 +196,10 @@ class ComicAssetLibraryNode:
 
         # Adjust selected_indices after deletions: selected indices are based on pre-deletion list
         # Need to map them to post-deletion list positions
-        if deletion_indices and selected_indices:
-            deletion_indices_set = set(deletion_indices)
+        if actual_deletions and selected_indices:
+            deletion_indices_set = set(actual_deletions)
             # Parse selection indices assuming they refer to pre-deletion list
-            pre_deletion_count = len(lib_list) + len(deletion_indices)
+            pre_deletion_count = len(lib_list) + len(actual_deletions)
             selected_before = self._parse_indices(selected_indices, pre_deletion_count)
             if selected_before:
                 adjusted_selected = []
@@ -204,7 +208,7 @@ class ComicAssetLibraryNode:
                     if sel_idx in deletion_indices_set:
                         continue
                     # Calculate adjustment: for each deletion index < sel_idx, reduce by 1
-                    adjustment = sum(1 for d in deletion_indices if d < sel_idx)
+                    adjustment = sum(1 for d in actual_deletions if d < sel_idx)
                     new_idx = sel_idx - adjustment
                     if 0 <= new_idx < len(lib_list):
                         adjusted_selected.append(new_idx)
@@ -266,18 +270,10 @@ class ComicAssetLibraryNode:
                 prev_count = _LAST_SENT_COUNT.get(key, 0)
                 new_count = len(lib_list)
 
-                # Parse pending deletions indices from input for delta removes
-                pending_del_indices: List[int] = []
-                if pending_deletions:
-                    try:
-                        pending_del_indices = [int(i.strip()) for i in pending_deletions.split(",") if i.strip().isdigit()]
-                    except Exception:
-                        pending_del_indices = []
-
                 # If first time, or counts don't make sense (overflow eviction, etc.), send full
                 full_sync_needed = (prev_count == 0)
                 if not full_sync_needed:
-                    if new_count < prev_count and not pending_del_indices:
+                    if new_count < prev_count and not actual_deletions:
                         # count shrunk but we have no explicit deletion info -> fall back to full
                         full_sync_needed = True
 
@@ -340,7 +336,8 @@ class ComicAssetLibraryNode:
                     _LAST_SENT_COUNT[key] = new_count
                 else:
                     # delta mode: send deletions and appends
-                    adds_count = max(0, new_count - prev_count + len(pending_del_indices))
+                    deletes_count = len(actual_deletions)
+                    adds_count = max(0, new_count - (prev_count - deletes_count))
                     # additions are assumed appended at the end of lib_list
                     adds: List[Dict[str, Any]] = []
                     if adds_count > 0:
@@ -388,7 +385,7 @@ class ComicAssetLibraryNode:
 
                     Payload = {
                         "mode": "delta",
-                        "removes": sorted([i for i in pending_del_indices if 0 <= i < prev_count], reverse=True),
+                        "removes": sorted([i for i in actual_deletions if 0 <= i < prev_count], reverse=True),
                         "adds": adds,
                         "count": new_count,
                         "selected": self._parse_indices(selected_indices, len(lib_list)) or [],
