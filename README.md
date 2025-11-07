@@ -114,7 +114,25 @@ ComicVerse 节点库提供了一套完整的漫画排版和设计工具，支持
 - `prompt`：组合后的提示词字符串，如 `(low angle, medium distance:1.30), cinematic lighting`
 - `details`：JSON 字符串，包含随机种子与每个分组的抽取详情
 
-### 5+. 其他节点（规划中）
+### 5. Text Preview (Comic)（文本预览节点）✅
+
+**功能**：
+- 显示任何 STRING 类型的输入内容
+- 无输出，纯显示节点
+- 用于调试和查看文本数据
+- 自动在工作流执行后更新显示
+
+**输入**：
+- `text`：任何 STRING 输出（必须连接）
+
+**输出**：无
+
+**用途**：
+- 查看 Prompt Library Loader 的输出
+- 预览 Prompt Rolling 生成的 prompt
+- 调试任何文本数据流
+
+### 6+. 其他节点（规划中）
 
 - Basic Layout Composer（布局生成）
 - Speech Bubble Generator（对话气泡）
@@ -144,13 +162,44 @@ git clone https://github.com/GeeeXYZ/ComfyUI-Comicverse.git
 
 ### 基本工作流
 
+#### 素材管理工作流
 1. **添加素材**：连接图片到 Comic Assets Library 的 `image_input_a` 和 `image_input_b`
 2. **选择图片**：点击缩略图勾选要输出的图片
 3. **设置数量**：调整 `output_count`，点击 "Set output count"
 4. **删除图片**：点击缩略图右上角 ❌ 标记待删除，运行工作流生效
 5. **使用模板**：连接 Layout Template Selector 选择排版模板
-6. **加载提示词库**：在 Prompt Library Loader 中添加 JSON 文件，运行查看摘要
-7. **随机组合提示词**：将 Loader 输出连接到 Prompt Rolling，设置各分组权重后运行获取组合
+
+#### Prompt 工作流
+1. **加载提示词库**：
+   - 在 ComfyUI 中搜索 `comic` 或 `prompt loader`
+   - 添加 Prompt Library Loader 节点
+   - 在输入框中配置 JSON 文件路径（参考 `examples/` 目录）
+   - 运行查看摘要
+
+2. **预览库内容**：
+   - 搜索 `comic` 或 `text preview`
+   - 添加 Text Preview 节点
+   - 连接 Loader 的 `library_json` 输出到 Text Preview
+   - 查看加载的内容
+
+3. **随机组合提示词**：
+   - 添加 Prompt Rolling 节点
+   - 连接 Loader 的 `library_json` 到 Rolling 的 `library_1`
+   - 可选：添加更多 Loader 到 `library_2` ~ `library_8`
+   - 运行工作流获取随机组合
+
+4. **查看结果**：
+   - 连接 Rolling 的 `prompt` 输出到 Text Preview
+   - 或直接连接到 CLIP Text Encode 用于图像生成
+
+**完整工作流示例**：
+```
+Prompt Library Loader → Text Preview (查看库内容)
+         ↓
+Prompt Rolling → Text Preview (查看生成的 prompt)
+         ↓
+CLIP Text Encode → 图像生成
+```
 
 ## 技术特点
 
@@ -159,6 +208,8 @@ git clone https://github.com/GeeeXYZ/ComfyUI-Comicverse.git
 - **延迟删除**：标记删除，运行工作流时执行
 - **动态 UI**：缩略图区域随图片数量自适应调整
 - **提示词管线**：从本地 JSON 库加载、随机抽取并加权输出提示词
+- **搜索友好**：所有节点都使用 `ComicVerse` 分类，搜索 `comic` 即可找到
+- **文本预览**：Text Preview 节点方便调试和查看文本数据流
 
 ## 提示词 JSON 规范
 
@@ -189,6 +240,28 @@ pytest -q
 
 > 如未安装 pytest，可执行 `pip install pytest`。
 
+## 更多文档
+
+- **[PROMPT_LOADER_GUIDE.md](PROMPT_LOADER_GUIDE.md)** - Prompt Loader 和 Rolling 详细使用指南
+- **[examples/README.md](examples/README.md)** - 示例 JSON 文件说明
+- **[BUGFIX_ANALYSIS.md](BUGFIX_ANALYSIS.md)** - Comic Library 索引问题修复分析
+
 ## 开发文档
 
 详见项目仓库的 commit history 和代码注释。
+
+## 更新日志
+
+### v1.1.0 (2025-11-07)
+- ✅ 新增 Text Preview (Comic) 节点
+- ✅ 修复 Comic Library 图片选择不一致问题
+- ✅ 改进 Prompt Library Loader 支持多行输入
+- ✅ 所有节点支持通过 `comic` 关键词搜索
+- ✅ 添加完整的示例 JSON 文件和使用指南
+
+### v1.0.0
+- ✅ Comic Assets Library 节点
+- ✅ Layout Template Selector 节点
+- ✅ Prompt Library Loader 节点
+- ✅ Prompt Rolling 节点
+- ✅ Prompt Strength Slider 节点

@@ -131,13 +131,33 @@ class PromptRollingNode:
 
     @classmethod
     def INPUT_TYPES(cls) -> Dict[str, Any]:
+        # Build required and optional in a way that groups library+weight together
         required = {
+            "seed": (
+                "INT",
+                {
+                    "default": -1,
+                    "min": -1,
+                    "max": 2**31 - 1,
+                    "tooltip": "Random seed (-1 for random, same seed = same result)",
+                },
+            ),
             "library_1": (
                 "STRING",
                 {
                     "multiline": False,
                     "forceInput": True,
                     "tooltip": "Connect a Prompt Library Loader output",
+                },
+            ),
+            "weight_1": (
+                "FLOAT",
+                {
+                    "default": 1.0,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.1,
+                    "tooltip": "Weight for library_1 prompts (1.0 = normal)",
                 },
             ),
         }
@@ -149,95 +169,79 @@ class PromptRollingNode:
                 {
                     "multiline": False,
                     "forceInput": True,
-                    "tooltip": "Optional additional prompt library",
+                    "tooltip": f"Optional prompt library {i}",
+                },
+            )
+            optional[f"weight_{i}"] = (
+                "FLOAT",
+                {
+                    "default": 1.0,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.1,
+                    "tooltip": f"Weight for library_{i} prompts (1.0 = normal)",
                 },
             )
 
         return {
             "required": required,
             "optional": optional,
-            "hidden": {
-                "weights_json": (
-                    "STRING",
-                    {
-                        "default": "{}",
-                    },
-                ),
-                "seed": (
-                    "INT",
-                    {
-                        "default": -1,
-                        "min": -1,
-                        "max": 2**31 - 1,
-                    },
-                ),
-            },
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("prompt", "details")
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("output",)
     FUNCTION = "roll"
     CATEGORY = "ComicVerse/Prompt"
 
-    def roll(self, weights_json: str = "{}", seed: int = -1, **kwargs: Any) -> Tuple[str, str]:
-        groups: List[PromptGroup] = []
+    def roll(self, seed: int = -1, **kwargs: Any) -> Tuple[str]:
+        # Collect connected libraries and their weights
+        libraries_with_weights: List[Tuple[int, str, float]] = []
+        
         for idx in range(self.MAX_INPUTS):
-            key = f"library_{idx + 1}"
-            library_raw = kwargs.get(key)
-            groups.extend(_parse_library_payload(library_raw, idx))
+            lib_key = f"library_{idx + 1}"
+            weight_key = f"weight_{idx + 1}"
+            
+            library_raw = kwargs.get(lib_key)
+            if library_raw:
+                weight = kwargs.get(weight_key, 1.0)
+                libraries_with_weights.append((idx, library_raw, float(weight)))
 
-        if not groups:
+        if not libraries_with_weights:
             raise PromptRollingError("No prompt libraries connected. Connect at least one loader output.")
 
-        weights = _parse_weights(weights_json)
+        # Parse all groups
+        all_groups: List[Tuple[PromptGroup, float]] = []
+        for idx, library_raw, weight in libraries_with_weights:
+            groups = _parse_library_payload(library_raw, idx)
+            for group in groups:
+                all_groups.append((group, weight))
 
+        # Setup random number generator
         rng = random.Random()
         if isinstance(seed, int) and seed >= 0:
             rng.seed(seed)
-            actual_seed = seed
         else:
             actual_seed = rng.randrange(0, 2**63)
             rng.seed(actual_seed)
 
-        selections = []
+        # Select and format prompts
         formatted_segments = []
-
-        for group in groups:
+        for group, weight in all_groups:
             entry_index = rng.randrange(len(group.entries))
             entry = group.entries[entry_index]
-            slot_id = f"{group.source_index}:{group.group_index}"
-            weight = weights.get(
-                slot_id,
-                weights.get(f"input_{group.source_index}", weights.get(group.name, 1.0)),
-            )
-
             text = _format_prompts(entry)
-            if weight != 1.0:
-                formatted = f"({text}:{weight:.2f})"
+            
+            # Format with weight if not 1.0
+            if abs(weight - 1.0) > 0.01:  # Use small epsilon for float comparison
+                formatted = f"({text}:{weight:.1f})"
             else:
                 formatted = text
-
+            
             formatted_segments.append(formatted)
-            selections.append(
-                {
-                    "slot_id": slot_id,
-                    "group_name": group.name,
-                    "source_index": group.source_index,
-                    "group_index": group.group_index,
-                    "weight": weight,
-                    "selected_index": entry_index,
-                    "selected_prompts": entry,
-                }
-            )
 
         prompt_output = ", ".join(segment for segment in formatted_segments if segment)
-
-        details = {
-            "seed": actual_seed,
-            "selections": selections,
-        }
-
-        return prompt_output, json.dumps(details, ensure_ascii=False)
+        
+        return (prompt_output,)
 
 
 NODE_CLASS_MAPPINGS = {
@@ -246,7 +250,7 @@ NODE_CLASS_MAPPINGS = {
 
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "PromptRollingNode": "Prompt Rolling",
+    "PromptRollingNode": "Prompt Rolling (Comic)",
 }
 
 

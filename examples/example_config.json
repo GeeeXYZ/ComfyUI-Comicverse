@@ -1,0 +1,19 @@
+[
+  {
+    "name": "camera_angles",
+    "path": "/absolute/path/to/ComfyUI-ComicVerse/examples/camera_angles.json"
+  },
+  {
+    "name": "lighting",
+    "path": "/absolute/path/to/ComfyUI-ComicVerse/examples/lighting.json"
+  },
+  {
+    "name": "composition",
+    "path": "/absolute/path/to/ComfyUI-ComicVerse/examples/composition.json"
+  },
+  {
+    "name": "style",
+    "path": "/absolute/path/to/ComfyUI-ComicVerse/examples/style.json"
+  }
+]
+

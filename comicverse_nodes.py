@@ -585,8 +585,8 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ComicVerseTestNode": "ComicVerse Test Node",
     "ComicAssetLibraryNode": "Comic Assets Library",
-    "LayoutTemplateSelectorNode": "排版模板选择 (LayoutTemplateSelector)",
-    "PromptStrengthSlider": "Prompt weight slider",
+    "LayoutTemplateSelectorNode": "Layout Template Selector (Comic)",
+    "PromptStrengthSlider": "Prompt Weight Slider (Comic)",
 }
 
 

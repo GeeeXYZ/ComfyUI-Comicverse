@@ -5,7 +5,7 @@ import pytest
 
 from prompt_loader_node import (
     PromptLibraryLoaderError,
-    _parse_file_specs,
+    PromptLibraryLoaderNode,
     _parse_prompt_file,
 )
 from prompt_rolling_node import PromptRollingNode, PromptRollingError, _parse_library_payload
@@ -38,25 +38,16 @@ def test_parse_prompt_file_newline_json(tmp_path: Path):
     assert entries == [["overhead", "wide shot"], ["close up"]]
 
 
-def test_parse_file_specs_requires_array():
-    with pytest.raises(PromptLibraryLoaderError):
-        _parse_file_specs("{}")
-
-
 def _build_library_payload(tmp_path: Path) -> str:
     prompt_file = tmp_path / "lighting.json"
     prompt_file.write_text(json.dumps([["soft light"], ["dramatic shadows"]]), encoding="utf-8")
 
-    spec_json = json.dumps([{ "name": "lighting", "path": str(prompt_file) }])
-    specs = _parse_file_specs(spec_json)
-
-    assert len(specs) == 1
-    groups = _parse_prompt_file(specs[0].path)
+    groups = _parse_prompt_file(prompt_file)
 
     payload = {
         "groups": [
             {
-                "name": specs[0].name,
+                "name": "lighting",
                 "entries": groups,
             }
         ]
@@ -68,13 +59,11 @@ def test_prompt_rolling_single_group(tmp_path: Path):
     payload = _build_library_payload(tmp_path)
 
     node = PromptRollingNode()
-    prompt, details_json = node.roll(library_1=payload, seed=42)
+    result = node.roll(library_1=payload, weight_1=1.0, seed=42)
 
+    assert len(result) == 1
+    prompt = result[0]
     assert prompt in {"soft light", "dramatic shadows"}
-
-    details = json.loads(details_json)
-    assert "seed" in details
-    assert len(details["selections"]) == 1
 
 
 def test_prompt_rolling_weights(tmp_path: Path):
@@ -92,20 +81,17 @@ def test_prompt_rolling_weights(tmp_path: Path):
     }
 
     payload_json = json.dumps(payload)
-    weights = json.dumps({"input_0": 1.5})
 
     node = PromptRollingNode()
-    prompt, details_json = node.roll(library_1=payload_json, weights_json=weights, seed=5)
+    result = node.roll(library_1=payload_json, weight_1=1.5, seed=5)
 
-    assert "1.50" in prompt
-
-    details = json.loads(details_json)
-    assert details["selections"][0]["weight"] == pytest.approx(1.5)
+    prompt = result[0]
+    assert "1.5" in prompt
 
 
 def test_prompt_rolling_requires_library():
     node = PromptRollingNode()
     with pytest.raises(PromptRollingError):
-        node.roll()
+        node.roll(seed=-1)
 
 

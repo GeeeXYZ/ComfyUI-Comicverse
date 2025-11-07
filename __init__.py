@@ -1,6 +1,7 @@
 """
 ComicVerse Nodes - ComfyUI Custom Nodes for Comic Layout
 Comic Assets Library with delete/pending deletion feature
+Prompt Library Loader and Rolling with Text Preview
 """
 
 from .comicverse_nodes import (
@@ -15,17 +16,23 @@ from .prompt_rolling_node import (
     NODE_CLASS_MAPPINGS as PROMPT_ROLLING_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as PROMPT_ROLLING_DISPLAY_MAPPINGS,
 )
+from .text_preview_node import (
+    NODE_CLASS_MAPPINGS as TEXT_PREVIEW_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as TEXT_PREVIEW_DISPLAY_MAPPINGS,
+)
 
 NODE_CLASS_MAPPINGS = {
     **COMICVERSE_CLASS_MAPPINGS,
     **PROMPT_LOADER_CLASS_MAPPINGS,
     **PROMPT_ROLLING_CLASS_MAPPINGS,
+    **TEXT_PREVIEW_CLASS_MAPPINGS,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     **COMICVERSE_DISPLAY_MAPPINGS,
     **PROMPT_LOADER_DISPLAY_MAPPINGS,
     **PROMPT_ROLLING_DISPLAY_MAPPINGS,
+    **TEXT_PREVIEW_DISPLAY_MAPPINGS,
 }
 
 WEB_DIRECTORY = "./js"

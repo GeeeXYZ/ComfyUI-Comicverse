@@ -1,0 +1,15 @@
+[
+  ["soft light", "diffused lighting", "gentle illumination"],
+  ["hard light", "dramatic shadows", "high contrast"],
+  ["rim light", "backlit", "edge lighting"],
+  ["three-point lighting", "studio setup", "professional lighting"],
+  ["natural light", "window light", "ambient daylight"],
+  ["golden hour", "warm sunlight", "magic hour"],
+  ["blue hour", "twilight", "cool tones", "dusk"],
+  ["low key", "dark mood", "minimal lighting", "noir"],
+  ["high key", "bright", "overexposed look", "ethereal"],
+  ["volumetric lighting", "god rays", "light beams"],
+  ["neon lighting", "cyberpunk", "artificial glow"],
+  ["candlelight", "firelight", "warm flickering"]
+]
+

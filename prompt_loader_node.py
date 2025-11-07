@@ -1,23 +1,16 @@
 """
 Prompt library loader node for ComicVerse custom nodes.
 
-Reads user-specified JSON files that describe prompt groups and exposes a
-normalized payload for downstream nodes (e.g. the prompt rolling node).
+Automatically loads JSON files from the library directory and provides
+a dropdown menu for selection.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
-
-
-@dataclass(frozen=True)
-class PromptFileSpec:
-    name: str
-    path: Path
 
 
 class PromptLibraryLoaderError(Exception):
@@ -28,6 +21,26 @@ class PromptLibraryLoaderError(Exception):
 # file mtime and the parsed prompt rows so we only incur IO when the file
 # changes.
 _PROMPT_FILE_CACHE: Dict[str, tuple[float, List[List[str]]]] = {}
+
+
+# Get the library directory path
+def _get_library_dir() -> Path:
+    """Get the path to the library directory."""
+    current_file = Path(__file__).resolve()
+    library_dir = current_file.parent / "library"
+    return library_dir
+
+
+def _scan_library_files() -> List[str]:
+    """Scan the library directory and return a list of available library names."""
+    library_dir = _get_library_dir()
+    
+    if not library_dir.exists():
+        library_dir.mkdir(parents=True, exist_ok=True)
+        return []
+    
+    json_files = sorted(library_dir.glob("*.json"))
+    return [f.stem for f in json_files]
 
 
 def _normalize_prompt_entries(entries: Sequence[Any], *, source: str) -> List[List[str]]:
@@ -92,9 +105,7 @@ def _parse_prompt_file(path: Path) -> List[List[str]]:
     try:
         data = json.loads(raw_text)
     except json.JSONDecodeError:
-        # Attempt to interpret as newline separated JSON arrays, e.g.
-        # ["prompt A", "prompt B"]
-        # ["prompt C"]
+        # Attempt to interpret as newline separated JSON arrays
         rows: List[List[str]] = []
         for segment in raw_text.splitlines():
             segment = segment.strip()
@@ -121,96 +132,70 @@ def _parse_prompt_file(path: Path) -> List[List[str]]:
     )
 
 
-def _parse_file_specs(config_json: str) -> List[PromptFileSpec]:
-    if not config_json:
-        return []
-
-    try:
-        raw_specs = json.loads(config_json)
-    except json.JSONDecodeError as exc:
-        raise PromptLibraryLoaderError(f"Invalid loader configuration JSON: {exc.msg}") from exc
-
-    if not isinstance(raw_specs, list):
-        raise PromptLibraryLoaderError("Loader configuration must be a JSON array of file specs.")
-
-    specs: List[PromptFileSpec] = []
-    for idx, entry in enumerate(raw_specs):
-        if not isinstance(entry, dict):
-            raise PromptLibraryLoaderError(
-                f"File spec at index {idx} must be an object with 'path' (and optional 'name')."
-            )
-        path_value = entry.get("path")
-        if not path_value or not isinstance(path_value, str):
-            raise PromptLibraryLoaderError(f"File spec at index {idx} is missing a string 'path'.")
-
-        name_value = entry.get("name")
-        if name_value is not None and not isinstance(name_value, str):
-            raise PromptLibraryLoaderError(f"'name' in file spec {idx} must be a string if provided.")
-
-        resolved_path = Path(path_value).expanduser().resolve()
-        category_name = name_value.strip() if name_value else resolved_path.stem
-
-        specs.append(PromptFileSpec(name=category_name, path=resolved_path))
-
-    return specs
-
-
 class PromptLibraryLoaderNode:
     @classmethod
     def INPUT_TYPES(cls) -> Dict[str, Any]:
+        # Scan available library files
+        available_libraries = _scan_library_files()
+        
+        # Provide a default if no libraries found
+        if not available_libraries:
+            available_libraries = ["(no libraries found)"]
+        
         return {
             "required": {
-                "file_specs_json": (
-                    "STRING",
+                "library_name": (
+                    available_libraries,
                     {
-                        "multiline": False,
-                        "default": "[]",
-                        "forceInput": False,
-                        "tooltip": "JSON array of file specs: [{\"name\": \"camera\", \"path\": \"/path/to/camera.json\"}]",
+                        "tooltip": "Select a prompt library from the library folder",
                     },
                 )
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("library_json", "summary")
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("library_json",)
     FUNCTION = "load_library"
     CATEGORY = "ComicVerse/Prompt"
+    OUTPUT_NODE = False
 
-    def load_library(self, file_specs_json: str) -> tuple[str, str]:
-        specs = _parse_file_specs(file_specs_json)
-        if not specs:
-            raise PromptLibraryLoaderError("No prompt files provided. Configure at least one file.")
-
-        groups: List[Dict[str, Any]] = []
-        total_prompts = 0
-
-        for spec in specs:
-            entries = _parse_prompt_file(spec.path)
-            total_prompts += len(entries)
-            groups.append(
-                {
-                    "name": spec.name,
-                    "path": str(spec.path),
-                    "entries": entries,
-                    "entry_count": len(entries),
-                }
+    def load_library(self, library_name: str) -> tuple[str]:
+        # Check for placeholder
+        if library_name == "(no libraries found)":
+            raise PromptLibraryLoaderError(
+                "No library files found in the library directory. "
+                "Please add JSON files to ComfyUI-ComicVerse/library/"
             )
-
+        
+        # Get the library file path
+        library_dir = _get_library_dir()
+        library_path = library_dir / f"{library_name}.json"
+        
+        if not library_path.exists():
+            raise PromptLibraryLoaderError(f"Library file not found: {library_path}")
+        
+        # Parse the library file
+        entries = _parse_prompt_file(library_path)
+        
+        # Build the output payload
+        groups = [
+            {
+                "name": library_name,
+                "path": str(library_path),
+                "entries": entries,
+                "entry_count": len(entries),
+            }
+        ]
+        
         payload = {
             "groups": groups,
-            "total_groups": len(groups),
-            "total_entries": total_prompts,
+            "total_groups": 1,
+            "total_entries": len(entries),
             "version": 1,
         }
-
-        summary_lines = [
-            f"{group['name']}: {group['entry_count']} entries ({group['path']})" for group in groups
-        ]
-        summary = os.linesep.join(summary_lines)
-
-        # Ensure ASCII characters remain untouched (e.g. Chinese prompts) by disabling ASCII escaping.
-        return json.dumps(payload, ensure_ascii=False), summary
+        
+        # Return JSON payload
+        return (json.dumps(payload, ensure_ascii=False),)
 
 
 NODE_CLASS_MAPPINGS = {
@@ -219,7 +204,7 @@ NODE_CLASS_MAPPINGS = {
 
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "PromptLibraryLoaderNode": "Prompt Library Loader",
+    "PromptLibraryLoaderNode": "Prompt Library Loader (Comic)",
 }
 
 
