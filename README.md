@@ -47,11 +47,78 @@ ComicVerse 节点库提供了一套完整的漫画排版和设计工具，支持
 - 3格斜切
 - 自由网格
 
-### 3-5. 其他节点（待实现）
+### 3. Prompt Library Loader（提示词库加载节点）✅
 
-- Basic Layout Composer
-- Speech Bubble Generator
-- Decorative Text Adder
+**功能**：
+
+- 读取一个或多个 JSON 提示词文件，并输出标准化的提示词库数据
+- 自动缓存文件内容，文件改动后自动刷新
+- 生成摘要信息，快速确认每个文件的提示词数量
+- 节点界面支持添加 / 编辑 / 删除文件路径，并显示最近一次运行的摘要
+
+**输入**：
+
+- `file_specs_json`：JSON 数组，例如：
+
+  ```json
+  [
+    {"name": "camera", "path": "/data/prompts/camera.json"},
+    {"name": "lighting", "path": "/data/prompts/lighting.json"}
+  ]
+  ```
+
+  - `name` 可选，默认为文件名
+  - `path` 支持绝对或相对路径，读取 UTF-8 JSON
+
+**输出**：
+
+- `library_json`：包含所有分组的 JSON 字符串
+- `summary`：人类可读的分组统计信息
+
+**提示词文件格式**：
+
+- 标准 JSON：
+
+  ```json
+  [
+    ["low angle", "medium distance"],
+    ["fish-eye", "18mm"]
+  ]
+  ```
+
+- 逐行 JSON 数组（每行一个分组）：
+
+  ```
+  ["low angle", "medium distance"]
+  ["fish-eye", "18mm"]
+  ```
+
+### 4. Prompt Rolling（提示词滚动组合节点）✅
+
+**功能**：
+
+- 连接 1~8 个 Prompt Library Loader 输出
+- 每次运行从每个分组随机抽取一组提示词
+- 支持为每个输入分组设置权重（默认 1.0）
+- 可选指定随机种子，便于复现
+- 节点界面自动增加输入端、提供权重调节控件，并显示最近一次的组合结果
+
+**输入**：
+
+- `library_1` ~ `library_8`：来自 Loader 的 `library_json`
+- `weights_json`（隐藏）：键值对，例如 `{ "input_0": 1.3, "camera": 1.1 }`
+- `seed`（隐藏）：-1 表示随机，否则使用固定整数种子
+
+**输出**：
+
+- `prompt`：组合后的提示词字符串，如 `(low angle, medium distance:1.30), cinematic lighting`
+- `details`：JSON 字符串，包含随机种子与每个分组的抽取详情
+
+### 5+. 其他节点（规划中）
+
+- Basic Layout Composer（布局生成）
+- Speech Bubble Generator（对话气泡）
+- Decorative Text Adder（装饰文字）
 
 ## 安装方法
 
@@ -82,6 +149,8 @@ git clone https://github.com/GeeeXYZ/ComfyUI-Comicverse.git
 3. **设置数量**：调整 `output_count`，点击 "Set output count"
 4. **删除图片**：点击缩略图右上角 ❌ 标记待删除，运行工作流生效
 5. **使用模板**：连接 Layout Template Selector 选择排版模板
+6. **加载提示词库**：在 Prompt Library Loader 中添加 JSON 文件，运行查看摘要
+7. **随机组合提示词**：将 Loader 输出连接到 Prompt Rolling，设置各分组权重后运行获取组合
 
 ## 技术特点
 
@@ -89,6 +158,36 @@ git clone https://github.com/GeeeXYZ/ComfyUI-Comicverse.git
 - **去重机制**：基于 SHA256 哈希自动去重
 - **延迟删除**：标记删除，运行工作流时执行
 - **动态 UI**：缩略图区域随图片数量自适应调整
+- **提示词管线**：从本地 JSON 库加载、随机抽取并加权输出提示词
+
+## 提示词 JSON 规范
+
+- 顶层为数组
+- 每个元素可以是：
+  - 字符串（视为单独一条提示词）
+  - 字符串数组（视为一组需要同时输出的提示词）
+- 空字符串会被忽略
+
+示例：
+
+```json
+[
+  ["close-up", "portrait"],
+  "bokeh",
+  ["wide shot", "landscape"]
+]
+```
+
+## 测试
+
+项目包含基础单元测试，验证提示词解析与随机组合逻辑：
+
+```bash
+cd ComfyUI-ComicVerse
+pytest -q
+```
+
+> 如未安装 pytest，可执行 `pip install pytest`。
 
 ## 开发文档
 
