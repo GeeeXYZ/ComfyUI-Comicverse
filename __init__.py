@@ -2,7 +2,11 @@
 ComicVerse Nodes - ComfyUI Custom Nodes for Comic Layout
 Comic Assets Library with delete/pending deletion feature
 Prompt Library Loader and Rolling with Text Preview
+Library Manager for editing prompt libraries
 """
+
+# Import API routes first to register them with PromptServer
+from . import library_manager_api
 
 from .comicverse_nodes import (
     NODE_CLASS_MAPPINGS as COMICVERSE_CLASS_MAPPINGS,
@@ -20,12 +24,17 @@ from .text_preview_node import (
     NODE_CLASS_MAPPINGS as TEXT_PREVIEW_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as TEXT_PREVIEW_DISPLAY_MAPPINGS,
 )
+from .library_manager_node import (
+    NODE_CLASS_MAPPINGS as LIBRARY_MANAGER_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as LIBRARY_MANAGER_DISPLAY_MAPPINGS,
+)
 
 NODE_CLASS_MAPPINGS = {
     **COMICVERSE_CLASS_MAPPINGS,
     **PROMPT_LOADER_CLASS_MAPPINGS,
     **PROMPT_ROLLING_CLASS_MAPPINGS,
     **TEXT_PREVIEW_CLASS_MAPPINGS,
+    **LIBRARY_MANAGER_CLASS_MAPPINGS,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -33,6 +42,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **PROMPT_LOADER_DISPLAY_MAPPINGS,
     **PROMPT_ROLLING_DISPLAY_MAPPINGS,
     **TEXT_PREVIEW_DISPLAY_MAPPINGS,
+    **LIBRARY_MANAGER_DISPLAY_MAPPINGS,
 }
 
 WEB_DIRECTORY = "./js"

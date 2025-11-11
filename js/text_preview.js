@@ -29,7 +29,7 @@ app.registerExtension({
                     {
                         default: "",
                         placeholder: "Text message output...",
-                        multiline: true,
+                multiline: true,
                     },
                 ],
                 app
@@ -87,11 +87,11 @@ app.registerExtension({
                 texts = message.string;
             } else if (message?.text) {
                 texts = message.text;
-            }
-            
+                }
+                
             if (texts) {
                 outSet.call(this, texts);
-            }
+                }
         };
     },
 });
