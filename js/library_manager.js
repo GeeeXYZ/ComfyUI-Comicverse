@@ -157,24 +157,29 @@ async function saveCurrentLibrary() {
     }
 }
 
-function handleEntryCommit(index, rawValue) {
+function handleEntryCommit(index, rawValue, inputEl) {
     const existing = state.currentEntries[index];
     const parsed = parseInputLine(rawValue);
 
     if (parsed === null) {
         state.currentEntries.splice(index, 1);
+        renderEditor();
     } else {
         const same =
             Array.isArray(parsed) && Array.isArray(existing)
                 ? parsed.length === existing.length &&
-                  parsed.every((value, idx) => value === existing[idx])
+                parsed.every((value, idx) => value === existing[idx])
                 : !Array.isArray(parsed) && !Array.isArray(existing) && parsed === existing;
         if (same) {
             return;
         }
         state.currentEntries[index] = parsed;
+        if (inputEl) {
+            inputEl.value = formatEntryForInput(parsed);
+        } else {
+            renderEditor();
+        }
     }
-    renderEditor();
     void saveCurrentLibrary();
 }
 
@@ -320,6 +325,7 @@ function renderEditor() {
     addInput.disabled = false;
     addInput.value = "";
 
+    const scrollTop = entryList.scrollTop;
     entryList.innerHTML = "";
 
     if (!state.currentEntries.length) {
@@ -344,7 +350,7 @@ function renderEditor() {
         input.addEventListener("keydown", (event) => {
             if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                handleEntryCommit(index, input.value);
+                handleEntryCommit(index, input.value, input);
             } else if (event.key === "Delete" && event.ctrlKey) {
                 event.preventDefault();
                 handleDeleteEntry(index);
@@ -352,7 +358,7 @@ function renderEditor() {
         });
 
         input.addEventListener("blur", () => {
-            handleEntryCommit(index, input.value);
+            handleEntryCommit(index, input.value, input);
         });
 
         const removeBtn = document.createElement("button");
@@ -360,12 +366,39 @@ function renderEditor() {
         removeBtn.className = "cv-lm__entry-delete";
         removeBtn.title = "移除该条目";
         removeBtn.textContent = "✕";
-        removeBtn.addEventListener("click", () => handleDeleteEntry(index));
+        removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            handleDeleteEntry(index);
+        });
+
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "cv-lm__entry-copy";
+        copyBtn.title = "复制到剪贴板";
+        copyBtn.textContent = "📋";
+        copyBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            try {
+                const text = formatEntryForInput(entry);
+                await navigator.clipboard.writeText(text);
+                setStatus("已复制到剪贴板", "success");
+            } catch (err) {
+                console.error(err);
+                setStatus("复制失败", "error");
+            }
+        });
 
         row.appendChild(indexTag);
         row.appendChild(input);
+        row.appendChild(copyBtn);
         row.appendChild(removeBtn);
         entryList.appendChild(row);
+    });
+
+    requestAnimationFrame(() => {
+        entryList.scrollTop = scrollTop;
     });
 }
 
@@ -438,12 +471,15 @@ function buildDialog() {
                 border-radius: 10px;
                 border: 1px solid transparent;
                 background: rgba(255, 255, 255, 0.02);
+                color: var(--comfy-panel-text, #e0e5f1);
                 cursor: pointer;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 transition: background 0.2s ease, border-color 0.2s ease;
                 font-size: 13px;
+                box-sizing: border-box;
+                width: 100%;
             }
             .cv-lm__list-item:hover,
             .cv-lm__list-item:focus {
@@ -535,9 +571,10 @@ function buildDialog() {
                 border-radius: 12px;
                 padding: 12px 16px;
                 background: rgba(255, 255, 255, 0.06);
-                color: inherit;
+                color: var(--comfy-panel-text, #e0e5f1);
                 font-size: 14px;
                 transition: background 0.2s ease;
+                min-width: 0;
             }
             .cv-lm__add > input:focus {
                 outline: none;
@@ -561,8 +598,8 @@ function buildDialog() {
             }
             .cv-lm__entry {
                 display: grid;
-                grid-template-columns: 36px 1fr auto;
-                gap: 12px;
+                grid-template-columns: 36px 1fr auto auto;
+                gap: 8px;
                 align-items: center;
                 padding: 10px 14px;
                 border-radius: 12px;
@@ -583,9 +620,11 @@ function buildDialog() {
             .cv-lm__entry-input {
                 border: none;
                 background: transparent;
-                color: inherit;
+                color: var(--comfy-panel-text, #e0e5f1);
                 font-size: 14px;
                 padding: 0;
+                width: 100%;
+                min-width: 0;
             }
             .cv-lm__entry-input:focus {
                 outline: none;
@@ -600,6 +639,20 @@ function buildDialog() {
             }
             .cv-lm__entry-delete:hover,
             .cv-lm__entry-delete:focus {
+                color: rgba(255, 255, 255, 0.9);
+                background: rgba(255, 255, 255, 0.06);
+            }
+            .cv-lm__entry-copy {
+                all: unset;
+                cursor: pointer;
+                font-size: 14px;
+                padding: 4px 8px;
+                color: rgba(255, 255, 255, 0.5);
+                border-radius: 8px;
+                margin-right: 4px;
+            }
+            .cv-lm__entry-copy:hover,
+            .cv-lm__entry-copy:focus {
                 color: rgba(255, 255, 255, 0.9);
                 background: rgba(255, 255, 255, 0.06);
             }
@@ -698,8 +751,15 @@ async function openLibraryManager() {
     });
 
     state.dialog.addEventListener("click", (event) => {
-        const shell = state.dialog?.querySelector(".cv-lm__shell");
-        if (shell && !shell.contains(event.target)) {
+        const dialogEl = event.currentTarget;
+        const rect = dialogEl.getBoundingClientRect();
+        const isInDialog = (
+            rect.top <= event.clientY &&
+            event.clientY <= rect.top + rect.height &&
+            rect.left <= event.clientX &&
+            event.clientX <= rect.left + rect.width
+        );
+        if (!isInDialog) {
             teardown();
         }
     });

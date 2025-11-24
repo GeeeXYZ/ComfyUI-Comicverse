@@ -7,7 +7,7 @@ app.registerExtension({
         const origOnDrawForeground = nodeType.prototype.onDrawForeground;
         const origOnMouseDown = nodeType.prototype.onMouseDown;
 
-        nodeType.prototype.onNodeCreated = function() {
+        nodeType.prototype.onNodeCreated = function () {
             const r = origOnNodeCreated ? origOnNodeCreated.apply(this, arguments) : undefined;
             const node = this;
             if (node.comfyClass !== "ComicAssetLibraryNode") return r;
@@ -18,7 +18,7 @@ app.registerExtension({
             node.comicversePreviewOverlay = null;
 
             // Image preview overlay method
-            node._showImagePreview = function(img, index) {
+            node._showImagePreview = function (img, index) {
                 // Close existing preview if any
                 if (node.comicversePreviewOverlay) {
                     node.comicversePreviewOverlay.remove();
@@ -93,7 +93,7 @@ app.registerExtension({
                 const desired = Math.max(1, Math.min(6, Number(outWidget?.value || 2)));
                 const current = (node.outputs && node.outputs.length) ? node.outputs.length : 0;
                 for (let i = current - 1; i >= desired; i--) node.removeOutput(i);
-                for (let i = current; i < desired; i++) node.addOutput(`image_${i+1}`, "IMAGE");
+                for (let i = current; i < desired; i++) node.addOutput(`image_${i + 1}`, "IMAGE");
                 // Force recalc by triggering onResize
                 node.onResize(node.size);
                 node.setDirtyCanvas(true, true);
@@ -117,15 +117,15 @@ app.registerExtension({
                 const desired = Math.max(1, Math.min(6, Number(outWidget?.value || 2)));
                 const current = (node.outputs && node.outputs.length) ? node.outputs.length : 0;
                 for (let i = current - 1; i >= desired; i--) node.removeOutput(i);
-                for (let i = current; i < desired; i++) node.addOutput(`image_${i+1}`, "IMAGE");
+                for (let i = current; i < desired; i++) node.addOutput(`image_${i + 1}`, "IMAGE");
                 node.setDirtyCanvas(true, true);
             }, 0);
 
             return r;
         };
-        
+
         // Hijack resize event to enforce minimum size
-        nodeType.prototype.onResize = function(newSize) {
+        nodeType.prototype.onResize = function (newSize) {
             if (this.comfyClass === "ComicAssetLibraryNode") {
                 const padding = 6;
                 const cell = 84;
@@ -143,7 +143,7 @@ app.registerExtension({
             }
         };
 
-        nodeType.prototype.onDrawForeground = function(ctx) {
+        nodeType.prototype.onDrawForeground = function (ctx) {
             if (origOnDrawForeground) origOnDrawForeground.apply(this, arguments);
             const node = this;
             if (node.comfyClass !== "ComicAssetLibraryNode") return;
@@ -164,7 +164,7 @@ app.registerExtension({
             const rows = Math.ceil(thumbs.length / cols);
             const desiredH = y0 + rows * (cell + padding) + padding;
             const minW = padding + cols * (cell + padding) - padding;
-            
+
             // Set size directly with real-time widget count
             if (!node.size) node.size = [minW, desiredH];
             else {
@@ -188,7 +188,7 @@ app.registerExtension({
                     const iy = y + (cell - h) / 2;
                     ctx.drawImage(img, ix, iy, w, h);
                 }
-                
+
                 // Draw "pending deletion" overlay first
                 if (node.comicversePendingDeletions?.includes(i)) {
                     ctx.fillStyle = "rgba(180, 0, 0, 0.4)";  // Dark red overlay
@@ -202,7 +202,7 @@ app.registerExtension({
                     ctx.lineTo(x + 10, y + cell - 10);
                     ctx.stroke();
                 }
-                
+
                 // Draw delete button (X) on top-right corner
                 const btnSize = 16;
                 const btnX = x + cell - btnSize - 2;
@@ -217,13 +217,13 @@ app.registerExtension({
                 ctx.moveTo(btnX + btnSize - 4, btnY + 4);
                 ctx.lineTo(btnX + 4, btnY + btnSize - 4);
                 ctx.stroke();
-                
+
                 // Draw zoom/preview button (magnifying glass icon) on bottom-right corner
                 const zoomBtnSize = 16;  // Same size as delete button
                 const zoomBtnX = x + cell - zoomBtnSize - 2;
                 const zoomBtnY = y + cell - zoomBtnSize - 2;
-                const centerX = zoomBtnX + zoomBtnSize/2;
-                const centerY = zoomBtnY + zoomBtnSize/2;
+                const centerX = zoomBtnX + zoomBtnSize / 2;
+                const centerY = zoomBtnY + zoomBtnSize / 2;
                 // Draw magnifying glass icon (circle + handle)
                 ctx.strokeStyle = "#fff";
                 ctx.lineWidth = 2;
@@ -234,7 +234,7 @@ app.registerExtension({
                 ctx.moveTo(centerX + 3, centerY + 3);
                 ctx.lineTo(centerX + 6, centerY + 6);
                 ctx.stroke();
-                
+
                 if (node.comicverseSelected?.includes(i)) {
                     ctx.strokeStyle = "#3fa7ff";
                     ctx.lineWidth = 2;
@@ -253,7 +253,7 @@ app.registerExtension({
             ctx.fillStyle = "";
         };
 
-        nodeType.prototype.onMouseDown = function(e, pos, graphcanvas) {
+        nodeType.prototype.onMouseDown = function (e, pos, graphcanvas) {
             if (origOnMouseDown) origOnMouseDown.apply(this, arguments);
             const node = this;
             if (node.comfyClass !== "ComicAssetLibraryNode") return;
@@ -342,7 +342,7 @@ app.registerExtension({
 
                 if (mode === "delta") {
                     // Apply removals first (descending indices)
-                    const toRemove = Array.isArray(removes) ? removes.slice().sort((a,b)=>b-a) : [];
+                    const toRemove = Array.isArray(removes) ? removes.slice().sort((a, b) => b - a) : [];
                     toRemove.forEach((idx) => {
                         if (Array.isArray(target.comicverseThumbs) && idx >= 0 && idx < target.comicverseThumbs.length) {
                             target.comicverseThumbs.splice(idx, 1);
@@ -361,8 +361,8 @@ app.registerExtension({
                     target.comicverseThumbs = incoming;
                 }
                 // Hard cap to avoid unbounded growth
-                if (target.comicverseThumbs.length > 50) {
-                    target.comicverseThumbs.splice(0, target.comicverseThumbs.length - 50);
+                if (target.comicverseThumbs.length > 30) {
+                    target.comicverseThumbs.splice(0, target.comicverseThumbs.length - 30);
                 }
                 // Use backend-adjusted selected indices (backend already adjusted for deletions)
                 if (Array.isArray(selected)) {
@@ -372,7 +372,7 @@ app.registerExtension({
                 }
                 const w = target.widgets?.find(w => w.name === "selected_indices");
                 if (w) w.value = (target.comicverseSelected || []).join(",");
-                
+
                 // Clear pending deletions after workflow execution
                 target.comicversePendingDeletions = [];
                 const wDel = target.widgets?.find(w => w.name === "pending_deletions");

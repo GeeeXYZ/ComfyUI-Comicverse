@@ -181,7 +181,7 @@ class ComicAssetLibraryNode:
                 selected_indices = ",".join(map(str, adjusted_selected)) if adjusted_selected else ""
         
         # Hard cap to avoid unbounded memory
-        max_cache = 50
+        max_cache = 30
         popped_count = 0
         for b in current_list:
             # compute hash to de-duplicate
