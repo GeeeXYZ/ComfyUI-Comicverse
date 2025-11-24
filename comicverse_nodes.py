@@ -181,7 +181,8 @@ class ComicAssetLibraryNode:
                 selected_indices = ",".join(map(str, adjusted_selected)) if adjusted_selected else ""
         
         # Hard cap to avoid unbounded memory
-        max_cache = 200
+        max_cache = 50
+        popped_count = 0
         for b in current_list:
             # compute hash to de-duplicate
             h, w, c = b.shape[1:]
@@ -198,6 +199,32 @@ class ComicAssetLibraryNode:
             if len(lib_list) > max_cache:
                 lib_list.pop(0)
                 lib_hashes.pop(0)
+                popped_count += 1
+        
+        # Adjust selected_indices for cache eviction (FIFO)
+        if popped_count > 0 and selected_indices:
+            # Parse current indices (which might have been adjusted by pending deletions)
+            # Note: We use a large max_len here because we are tracking indices relative to the state 
+            # BEFORE the pops in this loop, but AFTER pending deletions. 
+            # Actually, it's easier to parse based on the list size at the start of this loop?
+            # No, the indices are valid for the list as it was *before* we started popping in this loop.
+            # But we are adding and popping interleaved.
+            # Wait, the logic: "indices relative to the start of the list".
+            # If we pop 0, everyone shifts down by 1.
+            # So simply subtracting popped_count from the index is correct, 
+            # assuming the index referred to the position *before* these specific pops.
+            # Yes, selected_indices passed into this block refers to the list state after pending deletions.
+            
+            # We need to parse it first.
+            # We can use a dummy max_len because we just want the integers.
+            current_indices = self._parse_indices(selected_indices, 999999) or []
+            adjusted_indices = []
+            for idx in current_indices:
+                new_idx = idx - popped_count
+                if new_idx >= 0:
+                    adjusted_indices.append(new_idx)
+            selected_indices = ",".join(map(str, adjusted_indices)) if adjusted_indices else ""
+
         _LIBRARY_CACHE[key] = lib_list
         _LIBRARY_HASHES[key] = lib_hashes
 
@@ -257,7 +284,7 @@ class ComicAssetLibraryNode:
                 new_count = len(lib_list)
 
                 # If first time, or counts don't make sense (overflow eviction, etc.), send full
-                full_sync_needed = (prev_count == 0)
+                full_sync_needed = (prev_count == 0) or (popped_count > 0)
                 if not full_sync_needed:
                     if new_count < prev_count and not actual_deletions:
                         # count shrunk but we have no explicit deletion info -> fall back to full
@@ -313,6 +340,7 @@ class ComicAssetLibraryNode:
                         _PREVIEW_CACHE.clear()
 
                     Payload = {
+                        "node_id": unique_id,
                         "mode": "full",
                         "thumbs": thumbs,
                         "count": new_count,
@@ -370,6 +398,7 @@ class ComicAssetLibraryNode:
                             adds.append(entry)
 
                     Payload = {
+                        "node_id": unique_id,
                         "mode": "delta",
                         "removes": sorted([i for i in actual_deletions if 0 <= i < prev_count], reverse=True),
                         "adds": adds,

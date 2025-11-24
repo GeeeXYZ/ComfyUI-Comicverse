@@ -361,8 +361,8 @@ app.registerExtension({
                     target.comicverseThumbs = incoming;
                 }
                 // Hard cap to avoid unbounded growth
-                if (target.comicverseThumbs.length > 200) {
-                    target.comicverseThumbs.splice(0, target.comicverseThumbs.length - 200);
+                if (target.comicverseThumbs.length > 50) {
+                    target.comicverseThumbs.splice(0, target.comicverseThumbs.length - 50);
                 }
                 // Use backend-adjusted selected indices (backend already adjusted for deletions)
                 if (Array.isArray(selected)) {
