@@ -172,14 +172,26 @@ app.registerExtension({
                 node.size[0] = Math.max(node.size[0], minW);
             }
 
+            // Reset button stores
+            node.comicverseDeleteBtns = [];
+            node.comicverseZoomBtns = [];
+
+            // Iterate visually (0 to N-1) but draw data in reverse (N-1 to 0)
             for (let i = 0; i < thumbs.length; i++) {
+                // Visual position (i)
                 const row = Math.floor(i / cols);
                 const col = i % cols;
                 const x = x0 + col * (cell + padding);
                 const y = y0 + row * (cell + padding);
+
+                // Data index (reversed)
+                // If we have 5 items (0..4), visual 0 maps to data 4, visual 1 maps to data 3...
+                const dataIdx = thumbs.length - 1 - i;
+                const img = thumbs[dataIdx];
+
                 ctx.fillStyle = "#222";
                 ctx.fillRect(x, y, cell, cell);
-                const img = thumbs[i];
+
                 if (img?.width && img?.height) {
                     const scale = Math.min((cell - 8) / img.width, (cell - 8) / img.height);
                     const w = img.width * scale;
@@ -190,7 +202,7 @@ app.registerExtension({
                 }
 
                 // Draw "pending deletion" overlay first
-                if (node.comicversePendingDeletions?.includes(i)) {
+                if (node.comicversePendingDeletions?.includes(dataIdx)) {
                     ctx.fillStyle = "rgba(180, 0, 0, 0.4)";  // Dark red overlay
                     ctx.fillRect(x, y, cell, cell);
                     ctx.strokeStyle = "rgba(180, 0, 0, 0.9)";  // Dark red cross
@@ -235,17 +247,16 @@ app.registerExtension({
                 ctx.lineTo(centerX + 6, centerY + 6);
                 ctx.stroke();
 
-                if (node.comicverseSelected?.includes(i)) {
+                if (node.comicverseSelected?.includes(dataIdx)) {
                     ctx.strokeStyle = "#3fa7ff";
                     ctx.lineWidth = 2;
                     ctx.strokeRect(x + 1, y + 1, cell - 2, cell - 2);
                 }
 
-                // Store button bounds for click detection
-                if (!node.comicverseDeleteBtns) node.comicverseDeleteBtns = [];
-                if (!node.comicverseZoomBtns) node.comicverseZoomBtns = [];
-                node.comicverseDeleteBtns[i] = { x: btnX, y: btnY, w: btnSize, h: btnSize, index: i };
-                node.comicverseZoomBtns[i] = { x: zoomBtnX, y: zoomBtnY, w: zoomBtnSize, h: zoomBtnSize, index: i };
+                // Store button bounds for click detection, using REAL data index
+                // Note: We use push because we are iterating sequentially visually
+                node.comicverseDeleteBtns.push({ x: btnX, y: btnY, w: btnSize, h: btnSize, index: dataIdx });
+                node.comicverseZoomBtns.push({ x: zoomBtnX, y: zoomBtnY, w: zoomBtnSize, h: zoomBtnSize, index: dataIdx });
             }
             // Reset ctx styles to not affect ComfyUI widgets
             ctx.lineWidth = 1;
@@ -313,12 +324,18 @@ app.registerExtension({
             const col = Math.floor(x / (cell + padding));
             const row = Math.floor(y / (cell + padding));
             if (col < 0 || row < 0) return;
-            const idx = row * cols + col;
-            if (idx >= 0 && idx < thumbs.length) {
+
+            // Visual index
+            const visualIdx = row * cols + col;
+
+            if (visualIdx >= 0 && visualIdx < thumbs.length) {
+                // Map visual index to data index (reversed)
+                const dataIdx = thumbs.length - 1 - visualIdx;
+
                 const sel = node.comicverseSelected || [];
-                const i = sel.indexOf(idx);
+                const i = sel.indexOf(dataIdx);
                 if (i >= 0) sel.splice(i, 1);
-                else if (sel.length < 6) sel.push(idx);
+                else if (sel.length < 6) sel.push(dataIdx);
                 node.comicverseSelected = sel;
                 const w = node.widgets?.find(w => w.name === "selected_indices");
                 if (w) w.value = sel.join(",");

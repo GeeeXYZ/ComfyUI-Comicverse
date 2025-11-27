@@ -88,9 +88,10 @@ def _parse_prompt_file(path: Path) -> List[List[str]]:
         raise PromptLibraryLoaderError(f"Prompt file not found: {path}") from exc
 
     cache_key = str(path)
-    cached = _PROMPT_FILE_CACHE.get(cache_key)
-    if cached and cached[0] == mtime:
-        return cached[1]
+    # User requested to bypass cache for better synchronization
+    # cached = _PROMPT_FILE_CACHE.get(cache_key)
+    # if cached and cached[0] == mtime:
+    #     return cached[1]
 
     try:
         raw_text = path.read_text(encoding="utf-8")
@@ -158,6 +159,24 @@ class PromptLibraryLoaderNode:
     FUNCTION = "load_library"
     CATEGORY = "ComicVerse/Prompt"
     OUTPUT_NODE = False
+
+    @classmethod
+    def IS_CHANGED(cls, library_name: str) -> float:
+        """
+        Return the modification time of the library file.
+        This forces the node to re-execute if the file has been modified.
+        """
+        if library_name == "(no libraries found)":
+            return float("nan")
+            
+        library_dir = _get_library_dir()
+        library_path = library_dir / f"{library_name}.json"
+        
+        try:
+            mtime = library_path.stat().st_mtime
+            return mtime
+        except FileNotFoundError:
+            return float("nan")
 
     def load_library(self, library_name: str) -> tuple[str]:
         # Check for placeholder
