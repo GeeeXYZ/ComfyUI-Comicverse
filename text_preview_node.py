@@ -17,7 +17,8 @@ class TextPreviewNode:
     @classmethod
     def INPUT_TYPES(cls) -> Dict[str, Any]:
         return {
-            "required": {
+            "required": {},
+            "optional": {
                 "text": (
                     "STRING",
                     {
@@ -34,11 +35,14 @@ class TextPreviewNode:
     CATEGORY = "ComicVerse/Utils"
     OUTPUT_NODE = True  # Mark as output node so it executes even without downstream connections
 
-    def preview_text(self, text: str = "") -> Dict[str, Any]:
+    def preview_text(self, text: str = None) -> Dict[str, Any]:
         """
         Store the text for display and pass it through as output.
         The frontend widget will show it, and it can be connected to other nodes.
         """
+        if text is None:
+            text = ""
+            
         # Return in the format AlekPet uses: {"string": [...]}
         # This is what onExecuted receives in the frontend
         return {"ui": {"string": [text]}, "result": (text,)}

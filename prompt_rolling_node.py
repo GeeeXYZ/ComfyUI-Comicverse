@@ -126,23 +126,18 @@ def _format_prompts(prompts: Sequence[str]) -> str:
     return ", ".join(prompts)
 
 
+# Persistent state for sequential indices: unique_id -> current_index
+_ROLLING_STATE: Dict[str, int] = {}
+
 class PromptRollingNode:
     MAX_INPUTS = 8
 
     @classmethod
     def INPUT_TYPES(cls) -> Dict[str, Any]:
-        # Only define seed and first library+weight as required
-        # Frontend will dynamically add more weight widgets as needed
         required = {
-            "seed": (
-                "INT",
-                {
-                    "default": -1,
-                    "min": -1,
-                    "max": 2**31 - 1,
-                    "tooltip": "Random seed (-1 for random, same seed = same result)",
-                    "control_after_generate": "randomize",
-                },
+            "mode": (
+                ["random", "sequential"],
+                {"default": "random", "tooltip": "Random: pick random entries. Sequential: cycle through all combinations."},
             ),
             "library_1": (
                 "STRING",
@@ -162,9 +157,17 @@ class PromptRollingNode:
                     "tooltip": "Weight for library_1 prompts (1.0 = normal)",
                 },
             ),
+            "prompt_index": (
+                "INT",
+                {
+                    "default": -1,
+                    "min": -1,
+                    "step": 1,
+                    "tooltip": "For Sequential mode: -1 for auto, >=0 to lock specific index.",
+                },
+            ),
         }
 
-        # Library inputs 2-8 are optional (frontend adds inputs dynamically)
         optional: Dict[str, Tuple[str, Dict[str, Any]]] = {}
         for i in range(2, cls.MAX_INPUTS + 1):
             optional[f"library_{i}"] = (
@@ -175,7 +178,6 @@ class PromptRollingNode:
                     "tooltip": f"Optional prompt library {i}",
                 },
             )
-            # Also add optional weights (but frontend will manage them)
             optional[f"weight_{i}"] = (
                 "FLOAT",
                 {
@@ -190,14 +192,22 @@ class PromptRollingNode:
         return {
             "required": required,
             "optional": optional,
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+            },
         }
 
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("output",)
+    RETURN_TYPES = ("STRING", "INT")
+    RETURN_NAMES = ("output", "current_index")
     FUNCTION = "roll"
     CATEGORY = "ComicVerse/Prompt"
 
-    def roll(self, seed: int = -1, **kwargs: Any) -> Tuple[str]:
+    @classmethod
+    def IS_CHANGED(cls, unique_id: str, **kwargs: Any) -> float:
+        # Always re-run
+        return float("nan")
+
+    def roll(self, mode: str, prompt_index: int = -1, unique_id: str = "", **kwargs: Any) -> Tuple[str, int]:
         # Collect connected libraries and their weights
         libraries_with_weights: List[Tuple[int, str, float]] = []
         
@@ -220,32 +230,76 @@ class PromptRollingNode:
             for group in groups:
                 all_groups.append((group, weight))
 
-        # Setup random number generator
-        rng = random.Random()
-        if isinstance(seed, int) and seed >= 0:
-            rng.seed(seed)
-        else:
-            actual_seed = rng.randrange(0, 2**63)
-            rng.seed(actual_seed)
-
-        # Select and format prompts
         formatted_segments = []
-        for group, weight in all_groups:
-            entry_index = rng.randrange(len(group.entries))
-            entry = group.entries[entry_index]
-            text = _format_prompts(entry)
+        current_index = 0
+
+        if mode == "random":
+            # Random Mode Logic (Original Rolling)
+            # We don't use prompt_index or state for random mode in this design
+            # Just pure random selection
+            rng = random.Random() # System time seed
             
-            # Format with weight if not 1.0
-            if abs(weight - 1.0) > 0.01:  # Use small epsilon for float comparison
-                formatted = f"({text}:{weight:.1f})"
+            # If user wants a fixed seed, they should use the standard ComfyUI seed control?
+            # But we removed the 'seed' input. So it's always random.
+            
+            for group, weight in all_groups:
+                entry_index = rng.randrange(len(group.entries))
+                entry = group.entries[entry_index]
+                text = _format_prompts(entry)
+                
+                if abs(weight - 1.0) > 0.01:
+                    formatted = f"({text}:{weight:.1f})"
+                else:
+                    formatted = text
+                formatted_segments.append(formatted)
+                
+            # current_index is meaningless in random mode, return 0 or maybe a random hash?
+            current_index = 0 
+
+        else:
+            # Sequential Mode Logic (From Queue)
+            group_sizes = [len(g.entries) for g, _ in all_groups]
+            total_combinations = 1
+            for size in group_sizes:
+                total_combinations *= size
+
+            if total_combinations == 0:
+                return ("", 0)
+
+            if prompt_index >= 0:
+                # Locked mode
+                current_index = prompt_index % total_combinations
+                _ROLLING_STATE[unique_id] = (current_index + 1) % total_combinations
             else:
-                formatted = text
-            
-            formatted_segments.append(formatted)
+                # Auto mode
+                current_index = _ROLLING_STATE.get(unique_id, 0)
+                _ROLLING_STATE[unique_id] = (current_index + 1) % total_combinations
+
+            # Calculate indices (Mixed Radix)
+            temp_index = current_index
+            indices = []
+            for i in range(len(group_sizes)):
+                stride = 1
+                for size in group_sizes[i+1:]:
+                    stride *= size
+                group_idx = (temp_index // stride) % group_sizes[i]
+                indices.append(group_idx)
+
+            for i, (group_info, weight) in enumerate(all_groups):
+                group = group_info
+                entry_idx = indices[i]
+                entry = group.entries[entry_idx]
+                text = _format_prompts(entry)
+                
+                if abs(weight - 1.0) > 0.01:
+                    formatted = f"({text}:{weight:.1f})"
+                else:
+                    formatted = text
+                formatted_segments.append(formatted)
 
         prompt_output = ", ".join(segment for segment in formatted_segments if segment)
         
-        return (prompt_output,)
+        return (prompt_output, current_index)
 
 
 NODE_CLASS_MAPPINGS = {
