@@ -91,12 +91,25 @@ class LoadImageFolderWithPrompt:
         image_path = os.path.join(folder_path, file_name)
         img = Image.open(image_path)
         
-        # --- Prompt Extraction Logic (Duplicated from LoadImageWithPrompt) ---
         positive_prompt = ""
         negative_prompt = ""
         prompt_graph = {}
 
-        # 1. Extract Prompt JSON
+        # Strategy 0: ComicVerse Metadata (Direct Read)
+        if "ComicVerse_Positive" in img.info:
+            try:
+                positive_prompt = json.loads(img.info.get("ComicVerse_Positive", ""))
+            except:
+                positive_prompt = img.info.get("ComicVerse_Positive", "")
+                
+            try:
+                negative_prompt = json.loads(img.info.get("ComicVerse_Negative", ""))
+            except:
+                negative_prompt = img.info.get("ComicVerse_Negative", "")
+                
+            print(f"[ComicVerse] Loaded Prompts from Metadata for {file_name}")
+            print(f"[ComicVerse] Positive: {positive_prompt[:50]}...")
+
         # Strategy 1: Standard PNG Info
         if "prompt" in img.info:
             try:
@@ -107,9 +120,6 @@ class LoadImageFolderWithPrompt:
                     prompt_graph = raw_prompt
             except Exception as e:
                 print(f"Error extracting prompt from PNG info: {e}")
-
-        # Strategy 2: Exif (WebP/JPEG)
-        if not prompt_graph:
             try:
                 if "exif" in img.info:
                     exif_dict = piexif.load(img.info["exif"])
@@ -139,7 +149,7 @@ class LoadImageFolderWithPrompt:
             except Exception:
                 pass
 
-        if prompt_graph:
+        if prompt_graph and not positive_prompt:
             positive_prompt, negative_prompt = self.extract_prompts(prompt_graph)
 
         # --- Image Processing ---

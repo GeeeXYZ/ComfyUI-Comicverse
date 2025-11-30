@@ -231,16 +231,43 @@ class PromptRollingNode:
                 all_groups.append((group, weight))
 
         formatted_segments = []
-        current_index = 0
+        
+        # Unify index calculation for both modes
+        # This allows "random" mode to be deterministic based on the index
+        if prompt_index >= 0:
+            # Locked mode
+            current_index = prompt_index
+            # For sequential, we wrap around later. For random, we just use the index.
+            # Update state for next run if user switches back to auto
+            if mode == "sequential":
+                # Calculate total combinations for wrap-around logic
+                group_sizes = [len(g.entries) for g, _ in all_groups]
+                total_combinations = 1
+                for size in group_sizes:
+                    total_combinations *= size
+                if total_combinations > 0:
+                    _ROLLING_STATE[unique_id] = (current_index + 1) % total_combinations
+            else:
+                # For random, just increment
+                _ROLLING_STATE[unique_id] = current_index + 1
+        else:
+            # Auto mode
+            current_index = _ROLLING_STATE.get(unique_id, 0)
+            
+            if mode == "sequential":
+                group_sizes = [len(g.entries) for g, _ in all_groups]
+                total_combinations = 1
+                for size in group_sizes:
+                    total_combinations *= size
+                if total_combinations > 0:
+                    _ROLLING_STATE[unique_id] = (current_index + 1) % total_combinations
+            else:
+                 _ROLLING_STATE[unique_id] = current_index + 1
 
         if mode == "random":
-            # Random Mode Logic (Original Rolling)
-            # We don't use prompt_index or state for random mode in this design
-            # Just pure random selection
-            rng = random.Random() # System time seed
-            
-            # If user wants a fixed seed, they should use the standard ComfyUI seed control?
-            # But we removed the 'seed' input. So it's always random.
+            # Random Mode Logic
+            # Use current_index as seed for deterministic randomness
+            rng = random.Random(current_index)
             
             for group, weight in all_groups:
                 entry_index = rng.randrange(len(group.entries))
@@ -252,12 +279,9 @@ class PromptRollingNode:
                 else:
                     formatted = text
                 formatted_segments.append(formatted)
-                
-            # current_index is meaningless in random mode, return 0 or maybe a random hash?
-            current_index = 0 
 
         else:
-            # Sequential Mode Logic (From Queue)
+            # Sequential Mode Logic (Cartesian Product)
             group_sizes = [len(g.entries) for g, _ in all_groups]
             total_combinations = 1
             for size in group_sizes:
@@ -265,18 +289,12 @@ class PromptRollingNode:
 
             if total_combinations == 0:
                 return ("", 0)
-
-            if prompt_index >= 0:
-                # Locked mode
-                current_index = prompt_index % total_combinations
-                _ROLLING_STATE[unique_id] = (current_index + 1) % total_combinations
-            else:
-                # Auto mode
-                current_index = _ROLLING_STATE.get(unique_id, 0)
-                _ROLLING_STATE[unique_id] = (current_index + 1) % total_combinations
+            
+            # Wrap index for sequential access
+            seq_index = current_index % total_combinations
 
             # Calculate indices (Mixed Radix)
-            temp_index = current_index
+            temp_index = seq_index
             indices = []
             for i in range(len(group_sizes)):
                 stride = 1

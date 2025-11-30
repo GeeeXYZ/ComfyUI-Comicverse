@@ -28,8 +28,33 @@ class LoadImageWithPrompt:
         output_images = []
         output_masks = []
         
-        # 1. Extract Prompt JSON
+        positive_prompt = ""
+        negative_prompt = ""
         prompt_graph = {}
+        
+        # Strategy 0: ComicVerse Metadata (Direct Read)
+        # If the image was saved with SaveImageWithPromptInfo, we can read the prompts directly.
+        if "ComicVerse_Positive" in img.info:
+            try:
+                # Try to decode as JSON (new format)
+                positive_prompt = json.loads(img.info.get("ComicVerse_Positive", ""))
+            except:
+                # Fallback to raw string (old format or error)
+                positive_prompt = img.info.get("ComicVerse_Positive", "")
+            
+            try:
+                negative_prompt = json.loads(img.info.get("ComicVerse_Negative", ""))
+            except:
+                negative_prompt = img.info.get("ComicVerse_Negative", "")
+                
+            print(f"[ComicVerse] Loaded Prompts from Metadata for {image_path}")
+            print(f"[ComicVerse] Positive: {positive_prompt[:50]}...")
+            # If we found our custom metadata, we can skip the complex graph tracing
+            # But we still might want to load the prompt graph for other purposes if needed?
+            # For now, let's assume if we have this, we are good on prompts.
+            # We still try to load prompt_graph just in case, but we won't overwrite our found prompts.
+            pass
+        
         # Strategy 1: Standard PNG Info
         if "prompt" in img.info:
             try:
@@ -73,10 +98,9 @@ class LoadImageWithPrompt:
                 pass
 
         # 2. Parse Positive and Negative Prompts
-        positive_prompt = ""
-        negative_prompt = ""
+        # positive_prompt and negative_prompt are already initialized or set by Strategy 0
         
-        if prompt_graph:
+        if prompt_graph and not positive_prompt:
             positive_prompt, negative_prompt = self.extract_prompts(prompt_graph)
 
         # 3. Process Image
