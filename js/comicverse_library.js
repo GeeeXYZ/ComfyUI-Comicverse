@@ -334,8 +334,22 @@ app.registerExtension({
 
                 const sel = node.comicverseSelected || [];
                 const i = sel.indexOf(dataIdx);
-                if (i >= 0) sel.splice(i, 1);
-                else if (sel.length < 6) sel.push(dataIdx);
+
+                // Get dynamic limit from output_count widget
+                const outWidget = node.widgets?.find(w => w.name === "output_count");
+                const limit = Math.max(1, Math.min(6, Number(outWidget?.value || 2)));
+
+                if (i >= 0) {
+                    // Deselecting is always allowed
+                    sel.splice(i, 1);
+                } else {
+                    // Selecting: enforce limit with FIFO (replace oldest)
+                    while (sel.length >= limit) {
+                        sel.shift(); // Remove the first (oldest) item
+                    }
+                    sel.push(dataIdx);
+                }
+
                 node.comicverseSelected = sel;
                 const w = node.widgets?.find(w => w.name === "selected_indices");
                 if (w) w.value = sel.join(",");
