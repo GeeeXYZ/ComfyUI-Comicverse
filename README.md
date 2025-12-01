@@ -1,6 +1,6 @@
 # ComicVerse Nodes for ComfyUI
 
-ComicVerse 节点库提供了一套完整的漫画排版和设计工具，支持半自动漫画面板布局、对话气泡添加和装饰文字功能。
+ComicVerse 节点库提供了一套完整的漫画量产工具(开发中)。
 
 ## 功能特性
 
