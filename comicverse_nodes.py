@@ -540,6 +540,10 @@ class PromptStrengthSlider:
             if value > 2.0:
                 value = 2.0
             normalized[prompt] = value
+            
+            if value == 0.0:
+                continue
+
             formatted_pairs.append(f"({prompt}:{_format_float(value)})")
 
         formatted = ",".join(formatted_pairs)
